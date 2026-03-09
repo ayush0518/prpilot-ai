@@ -13,22 +13,38 @@ type PRAnalysis = {
 
 const MAX_DIFF_CHARS = 200_000;
 
+function isValidGitHubPRUrl(url: string): boolean {
+  const regex = /^https?:\/\/github\.com\/([^\/]+)\/([^\/]+)\/pull\/(\d+)\/?$/;
+  return regex.test(url);
+}
+
 export default function Home() {
+  const [prUrl, setPrUrl] = useState("");
   const [diffInput, setDiffInput] = useState("");
   const [analysisOutput, setAnalysisOutput] = useState<PRAnalysis | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState("");
 
   const handleAnalyze = async () => {
-    const trimmedInput = diffInput.trim();
+    const trimmedPrUrl = prUrl.trim();
+    const trimmedDiff = diffInput.trim();
 
-    if (!trimmedInput) {
-      setError("Please paste a git diff before analyzing.");
+    // Validate that at least one input is provided
+    if (!trimmedPrUrl && !trimmedDiff) {
+      setError("Please provide either a GitHub PR URL or paste a git diff.");
       setAnalysisOutput(null);
       return;
     }
 
-    if (trimmedInput.length > MAX_DIFF_CHARS) {
+    // Validate PR URL if provided
+    if (trimmedPrUrl && !isValidGitHubPRUrl(trimmedPrUrl)) {
+      setError("Invalid GitHub PR URL. Use format: https://github.com/owner/repo/pull/number");
+      setAnalysisOutput(null);
+      return;
+    }
+
+    // Validate diff size if provided
+    if (trimmedDiff && trimmedDiff.length > MAX_DIFF_CHARS) {
       setError(`Diff is too large. Keep it under ${MAX_DIFF_CHARS.toLocaleString()} characters.`);
       setAnalysisOutput(null);
       return;
@@ -38,12 +54,14 @@ export default function Home() {
     setError("");
 
     try {
+      const requestBody = trimmedPrUrl ? { pr_url: trimmedPrUrl } : { diff: trimmedDiff };
+
       const response = await fetch("/api/analyze-pr", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ diff: trimmedInput }),
+        body: JSON.stringify(requestBody),
       });
 
       const data = await response.json();
@@ -69,13 +87,31 @@ export default function Home() {
         <header className="space-y-2">
           <h1 className="text-3xl font-bold tracking-tight">PRPilot AI</h1>
           <p className="text-gray-600">
-            Analyze pull requests instantly from your git diff
+            Analyze pull requests instantly from your git diff or GitHub PR link
           </p>
         </header>
 
         {/* Input Section */}
 
         <section className="rounded-xl bg-white p-6 shadow-sm">
+          <div className="mb-6">
+            <label htmlFor="github-pr-url" className="mb-3 block text-sm font-medium">
+              GitHub PR URL (Optional)
+            </label>
+            <input
+              id="github-pr-url"
+              type="text"
+              value={prUrl}
+              onChange={(event) => setPrUrl(event.target.value)}
+              placeholder="https://github.com/owner/repo/pull/123"
+              className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2 text-sm text-gray-900 outline-none transition focus:border-gray-400"
+            />
+          </div>
+
+          <div className="mb-4 text-center text-xs font-medium text-gray-500 uppercase">
+            Or
+          </div>
+
           <label htmlFor="git-diff" className="mb-3 block text-sm font-medium">
             Paste Git Diff
           </label>
