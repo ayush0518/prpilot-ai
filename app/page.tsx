@@ -2,79 +2,65 @@
 
 import { useState } from "react";
 
-type PRSummary = {
-  summary: string;
-  keyChanges: string[];
-  testingSteps: string[];
-  changelog: string;
+type PRAnalysis = {
+  pr_title: string;
+  commit_message: string;
+  description: string;
+  risk_level: "Low" | "Medium" | "High";
+  blast_radius: string[];
+  test_cases: string[];
 };
+
+const MAX_DIFF_CHARS = 200_000;
 
 export default function Home() {
   const [diffInput, setDiffInput] = useState("");
-  const [generatedOutput, setGeneratedOutput] = useState<PRSummary | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [analysisOutput, setAnalysisOutput] = useState<PRAnalysis | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState("");
 
-  const handleGenerate = async () => {
-    if (!diffInput.trim()) {
-      setError("Please paste a git diff before generating.");
-      setGeneratedOutput(null);
+  const handleAnalyze = async () => {
+    const trimmedInput = diffInput.trim();
+
+    if (!trimmedInput) {
+      setError("Please paste a git diff before analyzing.");
+      setAnalysisOutput(null);
       return;
     }
 
-    setIsLoading(true);
+    if (trimmedInput.length > MAX_DIFF_CHARS) {
+      setError(`Diff is too large. Keep it under ${MAX_DIFF_CHARS.toLocaleString()} characters.`);
+      setAnalysisOutput(null);
+      return;
+    }
+
+    setIsAnalyzing(true);
     setError("");
 
     try {
-      const response = await fetch("/api/generate", {
+      const response = await fetch("/api/analyze-pr", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ diff: diffInput }),
+        body: JSON.stringify({ diff: trimmedInput }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Failed to generate PR summary.");
+        throw new Error(data.error || "Failed to analyze PR.");
       }
 
-      setGeneratedOutput(data);
+      setAnalysisOutput(data);
     } catch (err) {
       const message =
-        err instanceof Error
-          ? err.message
-          : "Something went wrong. Please try again.";
+        err instanceof Error ? err.message : "Something went wrong. Please try again.";
       setError(message);
-      setGeneratedOutput(null);
+      setAnalysisOutput(null);
     } finally {
-      setIsLoading(false);
+      setIsAnalyzing(false);
     }
-  };
-
-  const handleCopy = async () => {
-    if (!generatedOutput) return;
-
-    const formatted = `
-Summary
--------
-${generatedOutput.summary}
-
-Key Changes
------------
-${generatedOutput.keyChanges.map((c) => `- ${c}`).join("\n")}
-
-Testing Steps
--------------
-${generatedOutput.testingSteps.map((t, i) => `${i + 1}. ${t}`).join("\n")}
-
-Changelog
----------
-${generatedOutput.changelog}
-`;
-
-    await navigator.clipboard.writeText(formatted);
   };
 
   return (
@@ -83,7 +69,7 @@ ${generatedOutput.changelog}
         <header className="space-y-2">
           <h1 className="text-3xl font-bold tracking-tight">PRPilot AI</h1>
           <p className="text-gray-600">
-            Generate GitHub PR descriptions instantly from your git diff
+            Analyze pull requests instantly from your git diff
           </p>
         </header>
 
@@ -104,77 +90,71 @@ ${generatedOutput.changelog}
 
           <button
             type="button"
-            onClick={handleGenerate}
-            disabled={isLoading}
+            onClick={handleAnalyze}
+            disabled={isAnalyzing}
             className="mt-4 inline-flex items-center rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {isLoading ? "Generating..." : "Generate PR Summary"}
+            {isAnalyzing ? "Analyzing..." : "Analyze PR"}
           </button>
 
           {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
         </section>
 
-        {/* Output Section */}
-
         <section className="rounded-xl bg-white p-6 shadow-sm">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold">AI Output</h2>
+          <h2 className="mb-4 text-lg font-semibold">PR Analysis</h2>
 
-            <button
-              type="button"
-              onClick={handleCopy}
-              disabled={!generatedOutput}
-              className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Copy
-            </button>
-          </div>
-
-          {!generatedOutput && (
+          {!analysisOutput && (
             <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-500">
-              Generated PR summary will appear here...
+              Structured PR analysis will appear here...
             </div>
           )}
 
-          {generatedOutput && (
+          {analysisOutput && (
             <div className="space-y-6">
-
-              {/* Summary */}
-
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-                <h3 className="mb-2 font-semibold">Summary</h3>
-                <p>{generatedOutput.summary}</p>
+                <h3 className="mb-2 font-semibold">PR Title</h3>
+                <p>{analysisOutput.pr_title || "N/A"}</p>
               </div>
 
-              {/* Key Changes */}
-
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-                <h3 className="mb-2 font-semibold">Key Changes</h3>
-                <ul className="list-disc pl-5">
-                  {generatedOutput.keyChanges.map((item, index) => (
-                    <li key={index}>{item}</li>
-                  ))}
-                </ul>
+                <h3 className="mb-2 font-semibold">Commit Message</h3>
+                <p>{analysisOutput.commit_message || "N/A"}</p>
               </div>
 
-              {/* Testing Steps */}
-
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-                <h3 className="mb-2 font-semibold">Testing Steps</h3>
-                <ol className="list-decimal pl-5">
-                  {generatedOutput.testingSteps.map((item, index) => (
-                    <li key={index}>{item}</li>
-                  ))}
-                </ol>
+                <h3 className="mb-2 font-semibold">PR Description</h3>
+                <p className="whitespace-pre-wrap">{analysisOutput.description || "N/A"}</p>
               </div>
 
-              {/* Changelog */}
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                <h3 className="mb-2 font-semibold">Risk Level</h3>
+                <p>{analysisOutput.risk_level}</p>
+              </div>
 
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-                <h3 className="mb-2 font-semibold">Changelog</h3>
-                <pre className="font-mono text-sm whitespace-pre-wrap">
-                  {generatedOutput.changelog}
-                </pre>
+                <h3 className="mb-2 font-semibold">Blast Radius</h3>
+                {analysisOutput.blast_radius.length === 0 ? (
+                  <p>N/A</p>
+                ) : (
+                  <ul className="list-disc pl-5">
+                    {analysisOutput.blast_radius.map((item, index) => (
+                      <li key={index}>{item}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                <h3 className="mb-2 font-semibold">Suggested Test Cases</h3>
+                {analysisOutput.test_cases.length === 0 ? (
+                  <p>N/A</p>
+                ) : (
+                  <ul className="list-disc pl-5">
+                    {analysisOutput.test_cases.map((item, index) => (
+                      <li key={index}>{item}</li>
+                    ))}
+                  </ul>
+                )}
               </div>
             </div>
           )}
