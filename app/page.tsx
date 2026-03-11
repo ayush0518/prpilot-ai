@@ -56,7 +56,7 @@ export default function Home() {
     try {
       const requestBody = trimmedPrUrl ? { pr_url: trimmedPrUrl } : { diff: trimmedDiff };
 
-      const response = await fetch("/api/analyze-pr", {
+      const response = await fetch("/api/analyze-pr/v2", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -85,7 +85,7 @@ export default function Home() {
     <div className="min-h-screen bg-gray-100 px-4 py-10 text-gray-900">
       <main className="mx-auto flex w-full max-w-4xl flex-col gap-8">
         <header className="space-y-2">
-          <h1 className="text-3xl font-bold tracking-tight">PRPilot AI</h1>
+          <h1 className="text-3xl font-bold tracking-tight">MergeMind</h1>
           <p className="text-gray-600">
             Analyze pull requests instantly from your git diff or GitHub PR link
           </p>
@@ -169,7 +169,7 @@ export default function Home() {
 
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
                 <h3 className="mb-2 font-semibold">Blast Radius</h3>
-                {analysisOutput.blast_radius.length === 0 ? (
+                {!analysisOutput.blast_radius || analysisOutput.blast_radius.length === 0 ? (
                   <p>N/A</p>
                 ) : (
                   <ul className="list-disc pl-5">
@@ -182,7 +182,7 @@ export default function Home() {
 
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
                 <h3 className="mb-2 font-semibold">Suggested Test Cases</h3>
-                {analysisOutput.test_cases.length === 0 ? (
+                {!analysisOutput.test_cases || analysisOutput.test_cases.length === 0 ? (
                   <p>N/A</p>
                 ) : (
                   <ul className="list-disc pl-5">
