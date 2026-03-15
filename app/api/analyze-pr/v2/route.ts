@@ -1,4 +1,5 @@
 import { analyzePullRequest } from "@/app/services/prAnalyzer";
+import { PRAnalysisWithRiskScore } from "@/app/types/prAnalysis";
 
 interface AnalyzePRRequest {
   prNumber?: number;
@@ -10,12 +11,21 @@ interface AnalyzePRRequest {
 }
 
 interface AnalyzePRResponse {
-  analysis: string;
-  riskLevel: "LOW" | "MEDIUM" | "HIGH";
+  success: boolean;
+  analysis?: PRAnalysisWithRiskScore;
+  finalRiskLevel?: "LOW" | "MEDIUM" | "HIGH";
+  repository?: {
+    changedFiles: string[];
+    totalFiles: number;
+  };
+  error?: string;
+  errorCode?: string;
 }
 
 /**
- * Enhanced PR Analysis Endpoint
+ * Enhanced PR Analysis Endpoint (v2)
+ * Returns structured JSON analysis with risk scoring
+ * 
  * Supports multiple input formats:
  * 1. { prNumber: 123 } - requires GITHUB_REPO env var (owner/repo format)
  * 2. { owner: "user", repo: "repo", prNumber: 123 }
@@ -25,7 +35,7 @@ export async function POST(req: Request): Promise<Response> {
   try {
     const body = (await req.json()) as AnalyzePRRequest;
 
-    console.log("DEBUG: Incoming request body:", JSON.stringify(body));
+    console.log("DEBUG: Incoming v2 request body:", JSON.stringify(body));
 
     let prIdentifier: string;
 
@@ -35,8 +45,10 @@ export async function POST(req: Request): Promise<Response> {
       if (!gitHubRepo) {
         return Response.json(
           {
+            success: false,
             error: "GITHUB_REPO environment variable must be set or provide owner/repo",
-          },
+            errorCode: "MISSING_ENV",
+          } as AnalyzePRResponse,
           { status: 400 }
         );
       }
@@ -48,31 +60,49 @@ export async function POST(req: Request): Promise<Response> {
     }
     // Format 3: Full URL (supports url, prUrl, and pr_url fields)
     else if (body.url || body.prUrl || body.pr_url) {
-      prIdentifier = body.url || body.prUrl || body.pr_url;
+      prIdentifier = (body.url || body.prUrl || body.pr_url) as string;
     } else {
       return Response.json(
         {
+          success: false,
           error: "Invalid request. Provide either: (1) prNumber only (with GITHUB_REPO env), (2) owner/repo/prNumber, or (3) full URL",
-        },
+          errorCode: "INVALID_REQUEST",
+        } as AnalyzePRResponse,
         { status: 400 }
       );
     }
 
     // Validate required environment variables
     if (!process.env.GITHUB_TOKEN) {
-      return Response.json({ error: "GITHUB_TOKEN environment variable is not set" }, { status: 500 });
+      return Response.json(
+        {
+          success: false,
+          error: "GITHUB_TOKEN environment variable is not set",
+          errorCode: "MISSING_ENV",
+        } as AnalyzePRResponse,
+        { status: 500 }
+      );
     }
 
     if (!process.env.OPENAI_API_KEY) {
-      return Response.json({ error: "OPENAI_API_KEY environment variable is not set" }, { status: 500 });
+      return Response.json(
+        {
+          success: false,
+          error: "OPENAI_API_KEY environment variable is not set",
+          errorCode: "MISSING_ENV",
+        } as AnalyzePRResponse,
+        { status: 500 }
+      );
     }
 
     // Perform analysis
     const result = await analyzePullRequest(prIdentifier);
 
     const response: AnalyzePRResponse = {
+      success: true,
       analysis: result.analysis,
-      riskLevel: result.riskLevel,
+      finalRiskLevel: result.finalRiskLevel,
+      repository: result.repository,
     };
 
     return Response.json(response);
@@ -81,29 +111,34 @@ export async function POST(req: Request): Promise<Response> {
 
     console.error("PR Analysis Error:", errorMessage);
 
-    // Return appropriate error response
+    // Determine error code and status
+    let status = 500;
+    let errorCode = "ANALYSIS_FAILED";
+
     if (errorMessage.includes("404") || errorMessage.includes("not found")) {
-      return Response.json({ error: "Pull request not found" }, { status: 404 });
-    }
-
-    if (errorMessage.includes("401") || errorMessage.includes("Unauthorized")) {
-      return Response.json(
-        { error: "Authentication failed. Check GITHUB_TOKEN and OPENAI_API_KEY." },
-        { status: 401 }
-      );
-    }
-
-    if (errorMessage.includes("token")) {
-      return Response.json({ error: "Invalid or expired authentication token" }, { status: 401 });
-    }
-
-    if (errorMessage.includes("rate limit")) {
-      return Response.json({ error: "Rate limit exceeded. Please try again later." }, { status: 429 });
+      status = 404;
+      errorCode = "NOT_FOUND";
+    } else if (errorMessage.includes("401") || errorMessage.includes("Unauthorized")) {
+      status = 401;
+      errorCode = "UNAUTHORIZED";
+    } else if (errorMessage.includes("token")) {
+      status = 401;
+      errorCode = "TOKEN_ERROR";
+    } else if (errorMessage.includes("rate limit")) {
+      status = 429;
+      errorCode = "RATE_LIMITED";
+    } else if (errorMessage.includes("parse") || errorMessage.includes("JSON")) {
+      status = 500;
+      errorCode = "PARSE_ERROR";
     }
 
     return Response.json(
-      { error: `PR analysis failed: ${errorMessage}` },
-      { status: 500 }
+      {
+        success: false,
+        error: `PR analysis failed: ${errorMessage}`,
+        errorCode,
+      } as AnalyzePRResponse,
+      { status }
     );
   }
 }

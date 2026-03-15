@@ -1,16 +1,18 @@
 "use client";
 
 import { useState } from "react";
+import PRAnalysisCard from "./components/PRAnalysisCard";
+import { PRAnalysisWithRiskScore } from "@/app/types/prAnalysis";
 
-type PRAnalysis = {
-  pr_title: string;
-  commit_message: string;
-  description: string;
-  risk_level: "Low" | "Medium" | "High";
-  blast_radius: string[];
-  test_cases: string[];
+type AnalysisResult = {
+  analysis: PRAnalysisWithRiskScore;
+  finalRiskLevel: "LOW" | "MEDIUM" | "HIGH";
 };
 
+type RepositoryData = {
+  changedFiles: string[]
+  totalFiles: number
+}
 const MAX_DIFF_CHARS = 200_000;
 
 function isValidGitHubPRUrl(url: string): boolean {
@@ -21,9 +23,11 @@ function isValidGitHubPRUrl(url: string): boolean {
 export default function Home() {
   const [prUrl, setPrUrl] = useState("");
   const [diffInput, setDiffInput] = useState("");
-  const [analysisOutput, setAnalysisOutput] = useState<PRAnalysis | null>(null);
+  //const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState("");
+  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null)
+  const [repositoryData, setRepositoryData] = useState<RepositoryData | undefined>()
 
   const handleAnalyze = async () => {
     const trimmedPrUrl = prUrl.trim();
@@ -32,21 +36,21 @@ export default function Home() {
     // Validate that at least one input is provided
     if (!trimmedPrUrl && !trimmedDiff) {
       setError("Please provide either a GitHub PR URL or paste a git diff.");
-      setAnalysisOutput(null);
+      setAnalysisResult(null);
       return;
     }
 
     // Validate PR URL if provided
     if (trimmedPrUrl && !isValidGitHubPRUrl(trimmedPrUrl)) {
       setError("Invalid GitHub PR URL. Use format: https://github.com/owner/repo/pull/number");
-      setAnalysisOutput(null);
+      setAnalysisResult(null);
       return;
     }
 
     // Validate diff size if provided
     if (trimmedDiff && trimmedDiff.length > MAX_DIFF_CHARS) {
       setError(`Diff is too large. Keep it under ${MAX_DIFF_CHARS.toLocaleString()} characters.`);
-      setAnalysisOutput(null);
+      setAnalysisResult(null);
       return;
     }
 
@@ -70,12 +74,16 @@ export default function Home() {
         throw new Error(data.error || "Failed to analyze PR.");
       }
 
-      setAnalysisOutput(data);
+      setAnalysisResult({
+        analysis: data.analysis,
+        finalRiskLevel: data.finalRiskLevel,
+      });
+      setRepositoryData(data.repository);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Something went wrong. Please try again.";
       setError(message);
-      setAnalysisOutput(null);
+      setAnalysisResult(null);
     } finally {
       setIsAnalyzing(false);
     }
@@ -133,66 +141,32 @@ export default function Home() {
             {isAnalyzing ? "Analyzing..." : "Analyze PR"}
           </button>
 
+          {isAnalyzing && (
+            <p className="mt-3 flex items-center gap-2 text-sm text-blue-600">
+              <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-t-transparent"></span>
+              Analyzing PR with MergeMind...
+            </p>
+          )}
+
           {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
         </section>
 
         <section className="rounded-xl bg-white p-6 shadow-sm">
           <h2 className="mb-4 text-lg font-semibold">PR Analysis</h2>
 
-          {!analysisOutput && (
+          {!analysisResult && (
             <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-500">
               Structured PR analysis will appear here...
             </div>
           )}
 
-          {analysisOutput && (
-            <div className="space-y-6">
-              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-                <h3 className="mb-2 font-semibold">PR Title</h3>
-                <p>{analysisOutput.pr_title || "N/A"}</p>
-              </div>
-
-              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-                <h3 className="mb-2 font-semibold">Commit Message</h3>
-                <p>{analysisOutput.commit_message || "N/A"}</p>
-              </div>
-
-              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-                <h3 className="mb-2 font-semibold">PR Description</h3>
-                <p className="whitespace-pre-wrap">{analysisOutput.description || "N/A"}</p>
-              </div>
-
-              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-                <h3 className="mb-2 font-semibold">Risk Level</h3>
-                <p>{analysisOutput.risk_level}</p>
-              </div>
-
-              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-                <h3 className="mb-2 font-semibold">Blast Radius</h3>
-                {!analysisOutput.blast_radius || analysisOutput.blast_radius.length === 0 ? (
-                  <p>N/A</p>
-                ) : (
-                  <ul className="list-disc pl-5">
-                    {analysisOutput.blast_radius.map((item, index) => (
-                      <li key={index}>{item}</li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-
-              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-                <h3 className="mb-2 font-semibold">Suggested Test Cases</h3>
-                {!analysisOutput.test_cases || analysisOutput.test_cases.length === 0 ? (
-                  <p>N/A</p>
-                ) : (
-                  <ul className="list-disc pl-5">
-                    {analysisOutput.test_cases.map((item, index) => (
-                      <li key={index}>{item}</li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </div>
+          {analysisResult && (
+            <PRAnalysisCard
+              analysis={analysisResult.analysis}
+              finalRiskLevel={analysisResult.finalRiskLevel}
+              isLoading={isAnalyzing}
+              repositoryData={repositoryData}
+            />
           )}
         </section>
       </main>

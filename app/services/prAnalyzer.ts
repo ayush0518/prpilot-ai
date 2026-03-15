@@ -1,6 +1,9 @@
 import OpenAI from "openai";
 import { buildPRContext, PRContext } from "@/app/services/contextBuilder";
-import { createPRPrompt, parseAnalysisResponse, formatAnalysisMarkdown } from "@/app/prompts/prAnalysisPrompt";
+import { createPRPrompt } from "@/app/prompts/prAnalysisPrompt";
+import { parseLLMResponse } from "@/app/utils/parseLLMResponse";
+import { enhanceAnalysisWithRiskScore, determineFinalRiskLevel } from "@/app/core/riskEngine";
+import { PRAnalysisWithRiskScore } from "@/app/types/prAnalysis";
 
 interface GitHubPRData {
   title: string;
@@ -14,8 +17,12 @@ interface GitHubPRData {
 }
 
 interface AnalysisOutput {
-  analysis: string;
-  riskLevel: "LOW" | "MEDIUM" | "HIGH";
+  analysis: PRAnalysisWithRiskScore;
+  finalRiskLevel: "LOW" | "MEDIUM" | "HIGH";
+  repository?: {
+    changedFiles: string[];
+    totalFiles: number;
+  };
 }
 
 /**
@@ -109,32 +116,48 @@ async function fetchPRFiles(
 
 /**
  * Sends PR context to OpenAI for analysis
+ * Uses strict JSON output and parses response safely
  */
-async function analyzeWithOpenAI(context: PRContext): Promise<string> {
+async function analyzeWithOpenAI(context: PRContext): Promise<PRAnalysisWithRiskScore> {
   const client = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
   });
 
   const prompt = createPRPrompt(context);
 
-  const response = await client.chat.completions.create({
-    model: "gpt-4o-mini",
-    max_tokens: 2000,
-    messages: [
-      {
-        role: "user",
-        content: prompt,
-      },
-    ],
-  });
+  try {
+    const response = await client.chat.completions.create({
+      model: "gpt-4o-mini",
+      max_tokens: 2000,
+      messages: [
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+      temperature: 0.3, // Lower temperature for more consistent JSON
+    });
 
-  // Extract text from response
-  const textContent = response.choices[0]?.message.content;
-  if (!textContent) {
-    throw new Error("No text content in OpenAI response");
+    // Extract text from response
+    const textContent = response.choices[0]?.message.content;
+    if (!textContent) {
+      throw new Error("No text content in OpenAI response");
+    }
+
+    // Parse the response using our safe parser
+    const parseResult = parseLLMResponse(textContent);
+    if (!parseResult.success || !parseResult.analysis) {
+      throw new Error(`Failed to parse LLM response: ${parseResult.error}`);
+    }
+
+    // Enhance analysis with computed risk score
+    const enhancedAnalysis = enhanceAnalysisWithRiskScore(parseResult.analysis, context);
+
+    return enhancedAnalysis;
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    throw new Error(`OpenAI analysis failed: ${errorMessage}`);
   }
-
-  return textContent;
 }
 
 /**
@@ -179,16 +202,19 @@ export async function analyzePullRequest(
     // Build PR context
     const context = buildPRContext(prDetails.title, prDetails.body, files);
 
-    // Generate analysis prompt and send to OpenAI
-    const llmResponse = await analyzeWithOpenAI(context);
+    // Generate analysis with OpenAI
+    const analysis = await analyzeWithOpenAI(context);
 
-    // Parse and format the response
-    const analysisResult = parseAnalysisResponse(llmResponse);
-    const formattedAnalysis = formatAnalysisMarkdown(analysisResult);
+    // Determine final risk level (uses computed score validation)
+    const finalRiskLevel = determineFinalRiskLevel(analysis);
 
     return {
-      analysis: formattedAnalysis,
-      riskLevel: analysisResult.prSummary.overallRiskLevel,
+      analysis,
+      finalRiskLevel,
+      repository: {
+        changedFiles: context.files.map(file => file.filename),
+        totalFiles: context.files.length
+      }
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
@@ -204,16 +230,19 @@ export async function analyzePRFromData(prData: GitHubPRData): Promise<AnalysisO
     // Build PR context directly
     const context = buildPRContext(prData.title, prData.body, prData.files);
 
-    // Generate analysis prompt and send to OpenAI
-    const llmResponse = await analyzeWithOpenAI(context);
+    // Generate analysis with OpenAI
+    const analysis = await analyzeWithOpenAI(context);
 
-    // Parse and format the response
-    const analysisResult = parseAnalysisResponse(llmResponse);
-    const formattedAnalysis = formatAnalysisMarkdown(analysisResult);
+    // Determine final risk level
+    const finalRiskLevel = determineFinalRiskLevel(analysis);
 
     return {
-      analysis: formattedAnalysis,
-      riskLevel: analysisResult.prSummary.overallRiskLevel,
+      analysis,
+      finalRiskLevel,
+      repository: {
+        changedFiles: prData.files.map(file => file.filename),
+        totalFiles: prData.files.length
+      }
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";

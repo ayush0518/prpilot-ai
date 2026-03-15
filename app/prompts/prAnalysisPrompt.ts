@@ -1,7 +1,8 @@
 import { PRContext } from "@/app/services/contextBuilder";
 
 /**
- * Creates a structured prompt for PR analysis
+ * Creates a strict JSON prompt for PR analysis
+ * Enforces JSON-only output with no markdown or explanations
  */
 export function createPRPrompt(context: PRContext): string {
   const patches = context.files
@@ -12,154 +13,122 @@ export function createPRPrompt(context: PRContext): string {
     .map((file) => `- ${file.filename} (${file.language}) - Additions: ${file.additions}, Deletions: ${file.deletions}`)
     .join("\n");
 
-  const prompt = `You are MergeMind, an advanced AI code reviewer designed to analyze GitHub Pull Requests.
+  const filesCount = context.files.length;
+  const totalAdditions = context.files.reduce((sum, f) => sum + f.additions, 0);
+  const totalDeletions = context.files.reduce((sum, f) => sum + f.deletions, 0);
 
-Your job is to analyze the provided pull request context and produce a structured machine-readable report that can be consumed by a frontend dashboard.
+  const prompt = `You are MergeMind, an advanced AI code reviewer for pull requests.
 
-IMPORTANT RULES:
-
-1. You MUST return ONLY valid JSON.
-2. Do NOT include markdown formatting.
-3. Do NOT include explanations outside JSON.
-4. If a category has no issues, return an empty array.
-5. Risk level must be one of: LOW, MEDIUM, HIGH.
-6. The JSON structure MUST match the schema exactly.
-7. Ensure the response is valid JSON that can be parsed directly.
+CRITICAL INSTRUCTIONS:
+1. Return ONLY valid JSON - nothing else
+2. NO markdown formatting whatsoever
+3. NO explanations or text outside JSON
+4. NO code blocks or backticks
+5. NO comments in JSON
+6. If parsing fails, the entire analysis fails
 
 ---
 
-OUTPUT JSON SCHEMA
-
-Return an object with the following structure:
+REQUIRED JSON SCHEMA (return this structure exactly):
 
 {
-"prSummary": {
-"title": "string",
-"description": "string",
-"overallRiskLevel": "LOW | MEDIUM | HIGH"
-},
-"codeQualityIssues": [
-{
-"file": "filename",
-"issue": "description"
-}
-],
-"potentialBugs": [
-{
-"file": "filename",
-"bug": "description"
-}
-],
-"performanceConcerns": [
-{
-"file": "filename",
-"concern": "description"
-}
-],
-"securityRisks": [
-{
-"file": "filename",
-"risk": "description"
-}
-],
-"improvementSuggestions": [
-{
-"file": "filename",
-"suggestion": "description"
-}
-],
-"suggestedTestCases": [
-"test case developers should add"
-],
-"blastRadius": [],
-"analysisSummary": "short human readable explanation of the PR impact"
+  "summary": "2-3 sentence overview of what this PR does and its main impact",
+  "riskLevel": "LOW or MEDIUM or HIGH",
+  "issues": [
+    {
+      "type": "bug or security or performance or maintainability",
+      "file": "filename",
+      "description": "specific issue description",
+      "severity": "LOW or MEDIUM or HIGH",
+      "suggestion": "how to fix this issue"
+    }
+  ],
+  "improvements": [
+    "suggestion 1",
+    "suggestion 2"
+  ],
+  "confidenceScore": 0.95
 }
 
 ---
 
-GUIDELINES FOR ANALYSIS
-
-When reviewing the pull request:
-
-1. Review the changed files and code patches carefully.
-2. Identify code quality issues such as readability problems, naming issues, duplication, or maintainability concerns.
-3. Detect potential bugs including edge cases, missing error handling, or incorrect assumptions.
-4. Identify performance issues such as unnecessary re-renders, redundant API calls, or inefficient loops.
-5. Identify possible security risks such as unsanitized inputs or exposure of sensitive data.
-6. Suggest improvements that would make the code more maintainable or robust.
-7. Propose useful test cases developers should add to improve coverage.
-8. Estimate the overall risk level of merging this PR.
+CONSTRAINTS:
+- "summary" must be 1-3 sentences, max 200 chars
+- "riskLevel" must be exactly: LOW, MEDIUM, or HIGH
+- "issues" should include all significant problems (empty array if none)
+- Each issue must have ALL five fields: type, file, description, severity, suggestion
+- "type" must be one of: bug, security, performance, maintainability
+- "severity" must be one of: LOW, MEDIUM, HIGH
+- "improvements" should list 0-5 actionable suggestions
+- "confidenceScore" must be a number between 0 and 1
 
 ---
 
-RISK LEVEL CRITERIA
+ANALYSIS GUIDELINES:
 
-LOW
-
-* Minor refactors
-* UI changes
-* documentation updates
-
-MEDIUM
-
-* logic changes
-* API modifications
-* moderate refactoring
-
-HIGH
-
-* authentication
-* payment logic
-* database logic
-* security-sensitive areas
+1. BUGS: Missing null checks, edge cases, incorrect logic, race conditions
+2. SECURITY: Injection vulnerabilities, authentication issues, data exposure
+3. PERFORMANCE: Unnecessary re-renders, N+1 queries, memory leaks, inefficient algorithms
+4. MAINTAINABILITY: Unclear code, poor naming, violations of conventions, tech debt
 
 ---
 
-BLAST RADIUS RULE
+RISK LEVEL GUIDANCE:
 
-For now return an empty array:
+LOW RISK:
+- Documentation/comment updates
+- Minor UI tweaks
+- Style changes
+- Type corrections
+- < 50 lines changed
 
-"blastRadius": []
+MEDIUM RISK:
+- Logic changes to non-critical features
+- API modifications
+- New utility functions
+- Database schema non-breaking changes
+- 50-500 lines changed
 
-This field will be used later by the MergeMind dependency engine.
+HIGH RISK:
+- Authentication/authorization changes
+- Payment or billing logic
+- Database migrations
+- Core business logic
+- Security-sensitive code
+- > 500 lines changed in critical paths
 
 ---
 
-SELF VALIDATION STEP
+PULL REQUEST CONTEXT:
 
-Before returning your response:
+Title: ${context.title}
 
-1. Verify the JSON structure matches the schema.
-2. Ensure there are no markdown symbols.
-3. Ensure the response is valid JSON.
-4. Ensure every key exists.
+Description: ${context.description || "No description provided"}
 
----
-
-PULL REQUEST CONTEXT
-
-Title:
-${context.title}
-
-Description:
-${context.description || "No description provided"}
+Statistics:
+- Files changed: ${filesCount}
+- Additions: ${totalAdditions}
+- Deletions: ${totalDeletions}
 
 Files Changed:
 ${filesChanged}
 
-Code Patches:
+Code Diffs:
 ${patches}
 
 ---
 
-Return ONLY JSON.`;
+FINAL REMINDER: Output ONLY the JSON object. No escape sequences. No extra text. Valid JSON only.`;
 
   return prompt;
 }
 
 /**
- * Formats analysis output into a structured response
+ * New parsers and utilities (deprecated - now use parseLLMResponse from utils)
+ * Kept for backwards compatibility only
  */
+
+// Legacy type for backwards compatibility
 export interface AnalysisResult {
   prSummary: {
     title: string;
@@ -177,43 +146,10 @@ export interface AnalysisResult {
 }
 
 /**
- * Parses LLM response into structured analysis
- */
-export function parseAnalysisResponse(response: string): AnalysisResult {
-  try {
-    // Extract JSON from response (in case LLM includes extra text)
-    const jsonMatch = response.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error("No JSON found in response");
-    }
-
-    const parsed = JSON.parse(jsonMatch[0]);
-
-    // Validate required fields
-    if (
-      !parsed.prSummary ||
-      !parsed.codeQualityIssues ||
-      !parsed.potentialBugs ||
-      !parsed.performanceConcerns ||
-      !parsed.securityRisks ||
-      !parsed.improvementSuggestions ||
-      !parsed.suggestedTestCases ||
-      !parsed.analysisSummary
-    ) {
-      throw new Error("Missing required fields in JSON response");
-    }
-
-    return parsed as AnalysisResult;
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    throw new Error(`Failed to parse analysis response: ${errorMessage}`);
-  }
-}
-
-/**
  * Formats analysis result as markdown
+ * Deprecated: use formatAnalysisMarkdown for display
  */
-export function formatAnalysisMarkdown(result: AnalysisResult): string {
+export function formatAnalysisMarkdown(result: { prSummary: { title: string; description: string; overallRiskLevel: string }; codeQualityIssues: Array<{ file: string; issue: string }>; potentialBugs: Array<{ file: string; bug: string }>; performanceConcerns: Array<{ file: string; concern: string }>; securityRisks: Array<{ file: string; risk: string }>; improvementSuggestions: Array<{ file: string; suggestion: string }>; suggestedTestCases: string[]; analysisSummary: string }): string {
   const formatIssues = (issues: Array<{ file: string; [key: string]: string }>) => {
     if (issues.length === 0) return "No significant concerns identified.";
     return issues.map((item) => `- **${item.file}**: ${Object.values(item).slice(1)[0]}`).join("\n");
