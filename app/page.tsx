@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import PRAnalysisCard from "./components/PRAnalysisCard";
-import { PRAnalysisWithRiskScore } from "@/app/types/prAnalysis";
+import { PRAnalysisWithRiskScore, BlastRadius } from "@/app/types/prAnalysis";
 
 type AnalysisResult = {
   analysis: PRAnalysisWithRiskScore;
@@ -28,6 +28,7 @@ export default function Home() {
   const [error, setError] = useState("");
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null)
   const [repositoryData, setRepositoryData] = useState<RepositoryData | undefined>()
+  const [blastRadius, setBlastRadius] = useState<BlastRadius | null>(null)
 
   const handleAnalyze = async () => {
     const trimmedPrUrl = prUrl.trim();
@@ -79,6 +80,7 @@ export default function Home() {
         finalRiskLevel: data.finalRiskLevel,
       });
       setRepositoryData(data.repository);
+      setBlastRadius(data.blastRadius);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Something went wrong. Please try again.";
@@ -90,20 +92,20 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 px-4 py-10 text-gray-900">
+    <div className="min-h-screen bg-gray-950 px-4 py-10 text-gray-100">
       <main className="mx-auto flex w-full max-w-4xl flex-col gap-8">
         <header className="space-y-2">
-          <h1 className="text-3xl font-bold tracking-tight">MergeMind</h1>
-          <p className="text-gray-600">
+          <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">MergeMind</h1>
+          <p className="text-gray-400">
             Analyze pull requests instantly from your git diff or GitHub PR link
           </p>
         </header>
 
         {/* Input Section */}
 
-        <section className="rounded-xl bg-white p-6 shadow-sm">
+        <section className="rounded-xl bg-gray-900 p-6 shadow-lg border border-gray-800">
           <div className="mb-6">
-            <label htmlFor="github-pr-url" className="mb-3 block text-sm font-medium">
+            <label htmlFor="github-pr-url" className="mb-3 block text-sm font-medium text-cyan-400">
               GitHub PR URL (Optional)
             </label>
             <input
@@ -112,11 +114,11 @@ export default function Home() {
               value={prUrl}
               onChange={(event) => setPrUrl(event.target.value)}
               placeholder="https://github.com/owner/repo/pull/123"
-              className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2 text-sm text-gray-900 outline-none transition focus:border-gray-400"
+              className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-2 text-sm text-gray-100 placeholder-gray-500 outline-none transition focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
             />
           </div>
 
-          <div className="mb-4 text-center text-xs font-medium text-gray-500 uppercase">
+          {/* <div className="mb-4 text-center text-xs font-medium text-gray-500 uppercase">
             Or
           </div>
 
@@ -130,32 +132,32 @@ export default function Home() {
             onChange={(event) => setDiffInput(event.target.value)}
             placeholder="Paste your git diff here..."
             className="min-h-64 w-full rounded-lg border border-gray-200 bg-gray-50 p-4 font-mono text-sm text-gray-900 outline-none transition focus:border-gray-400"
-          />
+          /> */}
 
           <button
             type="button"
             onClick={handleAnalyze}
             disabled={isAnalyzing}
-            className="mt-4 inline-flex items-center rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
+            className="mt-4 inline-flex items-center rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 px-6 py-2 text-sm font-medium text-white transition hover:from-cyan-700 hover:to-blue-700 disabled:cursor-not-allowed disabled:opacity-60 shadow-lg"
           >
             {isAnalyzing ? "Analyzing..." : "Analyze PR"}
           </button>
 
           {isAnalyzing && (
-            <p className="mt-3 flex items-center gap-2 text-sm text-blue-600">
-              <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-t-transparent"></span>
+            <p className="mt-3 flex items-center gap-2 text-sm text-cyan-400">
+              <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-cyan-400 border-t-transparent"></span>
               Analyzing PR with MergeMind...
             </p>
           )}
 
-          {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
+          {error ? <p className="mt-3 text-sm text-red-400">{error}</p> : null}
         </section>
 
-        <section className="rounded-xl bg-white p-6 shadow-sm">
-          <h2 className="mb-4 text-lg font-semibold">PR Analysis</h2>
+        <section className="rounded-xl bg-gray-900 p-6 shadow-lg border border-gray-800">
+          <h2 className="mb-4 text-xl font-semibold text-cyan-400">PR Analysis</h2>
 
           {!analysisResult && (
-            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-500">
+            <div className="rounded-lg border border-gray-700 bg-gray-800 p-4 text-sm text-gray-400">
               Structured PR analysis will appear here...
             </div>
           )}
@@ -166,6 +168,7 @@ export default function Home() {
               finalRiskLevel={analysisResult.finalRiskLevel}
               isLoading={isAnalyzing}
               repositoryData={repositoryData}
+              blastRadius={blastRadius}
             />
           )}
         </section>

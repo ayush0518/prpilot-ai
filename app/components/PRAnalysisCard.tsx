@@ -6,7 +6,7 @@
  */
 
 import React from 'react';
-import { PRAnalysisWithRiskScore, IssueType, IssueSeverity } from '@/app/types/prAnalysis';
+import { PRAnalysisWithRiskScore, IssueType, IssueSeverity, BlastRadius, PRIssue } from '@/app/types/prAnalysis';
 
 interface PRAnalysisCardProps {
   analysis: PRAnalysisWithRiskScore;
@@ -17,6 +17,7 @@ interface PRAnalysisCardProps {
     changedFiles: string[];
     totalFiles: number;
   };
+  blastRadius?: BlastRadius | null;
 }
 
 /**
@@ -25,11 +26,11 @@ interface PRAnalysisCardProps {
 function getRiskLevelColor(level: 'LOW' | 'MEDIUM' | 'HIGH'): string {
   switch (level) {
     case 'LOW':
-      return 'bg-green-100 text-green-800 border-green-300';
+      return 'bg-green-900 text-green-300 border-green-500';
     case 'MEDIUM':
-      return 'bg-yellow-100 text-yellow-800 border-yellow-300';
+      return 'bg-yellow-900 text-yellow-300 border-yellow-500';
     case 'HIGH':
-      return 'bg-red-100 text-red-800 border-red-300';
+      return 'bg-red-900 text-red-300 border-red-500';
   }
 }
 
@@ -66,32 +67,40 @@ function getIssueTypeIcon(type: IssueType): string {
 /**
  * Issue Card Component
  */
-function IssueCard({ issue, index }: { issue: any; index: number }) {
+function IssueCard({ issue, index }: { issue: PRIssue; index: number }) {
+  const severityColorMap: Record<IssueSeverity, { bg: string; border: string; text: string }> = {
+    LOW: { bg: 'bg-blue-900', border: 'border-blue-700', text: 'text-blue-300' },
+    MEDIUM: { bg: 'bg-yellow-900', border: 'border-yellow-700', text: 'text-yellow-300' },
+    HIGH: { bg: 'bg-red-900', border: 'border-red-700', text: 'text-red-300' },
+  };
+
+  const colors = severityColorMap[issue.severity];
+
   return (
-    <div className={`p-4 rounded ${getSeverityColor(issue.severity)}`}>
-      <div className="flex items-start justify-between mb-2">
-        <div className="flex items-center gap-2">
-          <span className="text-xl">{getIssueTypeIcon(issue.type)}</span>
+    <div className={`p-4 rounded border ${colors.bg} ${colors.border}`}>
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex items-center gap-3">
+          <span className="text-2xl">{getIssueTypeIcon(issue.type)}</span>
           <div>
-            <h4 className="font-semibold text-sm capitalize">
+            <h4 className="font-semibold text-sm capitalize text-gray-100">
               {issue.type}
               <span className={`ml-2 px-2 py-1 rounded text-xs font-bold ${
-                issue.severity === 'HIGH' ? 'bg-red-200' :
-                issue.severity === 'MEDIUM' ? 'bg-yellow-200' :
-                'bg-blue-200'
+                issue.severity === 'HIGH' ? 'bg-red-700 text-red-200' :
+                issue.severity === 'MEDIUM' ? 'bg-yellow-700 text-yellow-200' :
+                'bg-blue-700 text-blue-200'
               }`}>
                 {issue.severity}
               </span>
             </h4>
-            <p className="text-xs text-gray-600 mt-1">{issue.file}</p>
+            <p className="text-xs text-gray-400 mt-1">{issue.file}</p>
           </div>
         </div>
-        <span className="text-xs bg-gray-200 px-2 py-1 rounded">#{index + 1}</span>
+        <span className="text-xs bg-gray-700 text-gray-200 px-2 py-1 rounded">#{index + 1}</span>
       </div>
-      <p className="text-sm mb-2 text-gray-800">{issue.description}</p>
-      <div className="bg-white p-2 rounded text-xs">
-        <p className="font-semibold text-gray-700 mb-1">Suggestion:</p>
-        <p className="text-gray-600">{issue.suggestion}</p>
+      <p className="text-sm mb-3 text-gray-200">{issue.description}</p>
+      <div className="bg-gray-900 p-3 rounded text-xs border border-gray-700">
+        <p className="font-semibold text-cyan-400 mb-1">💡 Suggestion:</p>
+        <p className="text-gray-300">{issue.suggestion}</p>
       </div>
     </div>
   );
@@ -106,6 +115,7 @@ export default function PRAnalysisCard({
   isLoading = false,
   onRetry,
   repositoryData,
+  blastRadius,
 }: PRAnalysisCardProps) {
   const issuesByType: Record<IssueType, number> = {
     bug: 0,
@@ -120,11 +130,11 @@ export default function PRAnalysisCard({
 
   if (isLoading) {
     return (
-      <div className="bg-white rounded-lg shadow-lg p-8">
+      <div className="bg-gray-900 rounded-lg shadow-lg p-8 border border-gray-700">
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
-            <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-            <p className="mt-4 text-gray-600">Analyzing PR...</p>
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-cyan-500"></div>
+            <p className="mt-4 text-gray-400">Analyzing PR...</p>
           </div>
         </div>
       </div>
@@ -132,91 +142,91 @@ export default function PRAnalysisCard({
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-lg overflow-hidden">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-blue-800 text-white p-6">
+    <div className="bg-gray-900 rounded-lg shadow-2xl overflow-hidden border border-gray-700">
+      {/* Header - Vibrant Gradient */}
+      <div className="bg-gradient-to-r from-cyan-500 via-purple-500 to-blue-600 text-white p-6">
         <div className="flex items-start justify-between">
           <div>
-            <h2 className="text-2xl font-bold mb-2">PR Analysis Report</h2>
-            <p className="text-blue-100">{analysis.summary}</p>
+            <h2 className="text-3xl font-bold mb-2 drop-shadow-lg">PR Analysis Report</h2>
+            <p className="text-cyan-50 drop-shadow-md text-lg">{analysis.summary}</p>
           </div>
-          <div className={`px-4 py-2 rounded-full font-bold text-lg border-2 ${getRiskLevelColor(finalRiskLevel)}`}>
+          <div className={`px-6 py-3 rounded-full font-bold text-lg border-2 shadow-lg ${getRiskLevelColor(finalRiskLevel)}`}>
             {finalRiskLevel} RISK
           </div>
         </div>
       </div>
 
       {/* Content */}
-      <div className="p-6">
+      <div className="p-6 bg-gray-900">
         {/* Risk Score Breakdown */}
-        <div className="mb-8 p-4 bg-gray-50 rounded-lg">
-          <h3 className="font-bold text-lg mb-4 text-gray-800">Risk Assessment</h3>
+        <div className="mb-8 p-5 bg-gray-800 rounded-lg border border-gray-700">
+          <h3 className="font-bold text-xl mb-4 text-cyan-400">Risk Assessment</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-white p-3 rounded border">
-              <p className="text-xs text-gray-600 mb-1">Diff Size Risk</p>
-              <p className="text-xl font-bold text-blue-600">
+            <div className="bg-gray-900 p-4 rounded border border-purple-500 hover:border-purple-400 transition">
+              <p className="text-xs text-gray-300 mb-1">Diff Size Risk</p>
+              <p className="text-2xl font-bold text-purple-400">
                 {(analysis.riskScoreBreakdown.diffSizeRisk * 100).toFixed(0)}%
               </p>
             </div>
-            <div className="bg-white p-3 rounded border">
-              <p className="text-xs text-gray-600 mb-1">Issue Count Risk</p>
-              <p className="text-xl font-bold text-purple-600">
+            <div className="bg-gray-900 p-4 rounded border border-violet-500 hover:border-violet-400 transition">
+              <p className="text-xs text-gray-300 mb-1">Issue Count Risk</p>
+              <p className="text-2xl font-bold text-violet-400">
                 {(analysis.riskScoreBreakdown.issueCountRisk * 100).toFixed(0)}%
               </p>
             </div>
-            <div className="bg-white p-3 rounded border">
-              <p className="text-xs text-gray-600 mb-1">Severity Risk</p>
-              <p className="text-xl font-bold text-orange-600">
+            <div className="bg-gray-900 p-4 rounded border border-orange-500 hover:border-orange-400 transition">
+              <p className="text-xs text-gray-300 mb-1">Severity Risk</p>
+              <p className="text-2xl font-bold text-orange-400">
                 {(analysis.riskScoreBreakdown.issueSeverityRisk * 100).toFixed(0)}%
               </p>
             </div>
-            <div className="bg-white p-3 rounded border">
-              <p className="text-xs text-gray-600 mb-1">Overall Score</p>
-              <p className="text-xl font-bold text-red-600">
+            <div className="bg-gray-900 p-4 rounded border border-red-500 hover:border-red-400 transition">
+              <p className="text-xs text-gray-300 mb-1">Overall Score</p>
+              <p className="text-2xl font-bold text-red-400">
                 {analysis.riskScoreBreakdown.finalRiskScore}%
               </p>
             </div>
           </div>
-          <p className="text-sm text-gray-700 mt-4 italic">{analysis.riskScoreBreakdown.rationale}</p>
+          <p className="text-sm text-gray-300 mt-4 italic border-l-2 border-cyan-500 pl-3">{analysis.riskScoreBreakdown.rationale}</p>
         </div>
 
         {/* Issues Statistics */}
         {analysis.issues.length > 0 && (
           <div className="mb-8">
-            <h3 className="font-bold text-lg mb-4 text-gray-800">Issues Found: {analysis.issues.length}</h3>
+            <h3 className="font-bold text-xl mb-4 text-cyan-400">Issues Found: {analysis.issues.length}</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
               {issuesByType.bug > 0 && (
-                <div className="bg-blue-50 p-3 rounded border border-blue-200">
-                  <p className="text-2xl mb-1">🐛</p>
-                  <p className="text-sm text-gray-600">Bugs</p>
-                  <p className="text-xl font-bold text-blue-600">{issuesByType.bug}</p>
+                <div className="bg-gray-800 p-4 rounded border border-blue-500 hover:border-blue-400 transition">
+                  <p className="text-2xl mb-2">🐛</p>
+                  <p className="text-sm text-gray-300">Bugs</p>
+                  <p className="text-2xl font-bold text-blue-400">{issuesByType.bug}</p>
                 </div>
               )}
               {issuesByType.security > 0 && (
-                <div className="bg-red-50 p-3 rounded border border-red-200">
-                  <p className="text-2xl mb-1">🔒</p>
-                  <p className="text-sm text-gray-600">Security</p>
-                  <p className="text-xl font-bold text-red-600">{issuesByType.security}</p>
+                <div className="bg-gray-800 p-4 rounded border border-red-500 hover:border-red-400 transition">
+                  <p className="text-2xl mb-2">🔒</p>
+                  <p className="text-sm text-gray-300">Security</p>
+                  <p className="text-2xl font-bold text-red-400">{issuesByType.security}</p>
                 </div>
               )}
               {issuesByType.performance > 0 && (
-                <div className="bg-yellow-50 p-3 rounded border border-yellow-200">
-                  <p className="text-2xl mb-1">⚡</p>
-                  <p className="text-sm text-gray-600">Performance</p>
-                  <p className="text-xl font-bold text-yellow-600">{issuesByType.performance}</p>
+                <div className="bg-gray-800 p-4 rounded border border-orange-500 hover:border-orange-400 transition">
+                  <p className="text-2xl mb-2">⚡</p>
+                  <p className="text-sm text-gray-300">Performance</p>
+                  <p className="text-2xl font-bold text-orange-400">{issuesByType.performance}</p>
                 </div>
               )}
               {issuesByType.maintainability > 0 && (
-                <div className="bg-purple-50 p-3 rounded border border-purple-200">
-                  <p className="text-2xl mb-1">🔧</p>
-                  <p className="text-sm text-gray-600">Maintainability</p>
-                  <p className="text-xl font-bold text-purple-600">{issuesByType.maintainability}</p>
+                <div className="bg-gray-800 p-4 rounded border border-purple-500 hover:border-purple-400 transition">
+                  <p className="text-2xl mb-2">🔧</p>
+                  <p className="text-sm text-gray-300">Maintainability</p>
+                  <p className="text-2xl font-bold text-purple-400">{issuesByType.maintainability}</p>
                 </div>
               )}
             </div>
 
             {/* Issues List */}
-            <div className="space-y-4">
+            <div className="space-y-3">
               {analysis.issues.map((issue, index) => (
                 <IssueCard key={index} issue={issue} index={index} />
               ))}
@@ -225,22 +235,22 @@ export default function PRAnalysisCard({
         )}
 
         {analysis.issues.length === 0 && (
-          <div className="mb-8 p-6 bg-green-50 rounded-lg border border-green-200 text-center">
-            <p className="text-2xl mb-2">✅</p>
-            <p className="text-lg font-semibold text-green-800">No Issues Found</p>
-            <p className="text-sm text-green-700 mt-2">This PR looks good!</p>
+          <div className="mb-8 p-6 bg-gray-800 rounded-lg border border-green-500 text-center">
+            <p className="text-4xl mb-2">✅</p>
+            <p className="text-lg font-semibold text-green-400">No Issues Found</p>
+            <p className="text-sm text-gray-300 mt-2">This PR looks good!</p>
           </div>
         )}
 
         {/* Improvements */}
         {analysis.improvements.length > 0 && (
           <div className="mb-8">
-            <h3 className="font-bold text-lg mb-4 text-gray-800">Suggested Improvements</h3>
+            <h3 className="font-bold text-xl mb-4 text-cyan-400">Suggested Improvements</h3>
             <ul className="space-y-2">
               {analysis.improvements.map((improvement, index) => (
-                <li key={index} className="flex items-start gap-3 p-3 bg-blue-50 rounded">
-                  <span className="text-blue-600 font-bold mt-1">•</span>
-                  <span className="text-gray-800">{improvement}</span>
+                <li key={index} className="flex items-start gap-3 p-3 bg-gray-800 rounded border border-green-600 hover:border-green-500 transition">
+                  <span className="text-green-400 font-bold mt-1">✓</span>
+                  <span className="text-gray-100">{improvement}</span>
                 </li>
               ))}
             </ul>
@@ -248,12 +258,12 @@ export default function PRAnalysisCard({
         )}
 
         {/* Confidence Score */}
-        <div className="mb-8 p-4 bg-gray-50 rounded-lg">
-          <p className="text-sm text-gray-600 mb-2">Analysis Confidence</p>
+        <div className="mb-8 p-4 bg-gray-800 rounded-lg border border-gray-700">
+          <p className="text-sm text-gray-300 mb-2">Analysis Confidence</p>
           <div className="flex items-center gap-3">
-            <div className="flex-1 bg-gray-200 rounded-full h-2">
+            <div className="flex-1 bg-gray-700 rounded-full h-3">
               <div
-                className={`h-2 rounded-full ${
+                className={`h-3 rounded-full ${
                   analysis.confidenceScore >= 0.8 ? 'bg-green-500' :
                   analysis.confidenceScore >= 0.6 ? 'bg-yellow-500' :
                   'bg-orange-500'
@@ -261,38 +271,79 @@ export default function PRAnalysisCard({
                 style={{ width: `${analysis.confidenceScore * 100}%` }}
               ></div>
             </div>
-            <p className="font-semibold text-gray-800">{(analysis.confidenceScore * 100).toFixed(1)}%</p>
+            <p className="font-semibold text-cyan-400 w-16">{(analysis.confidenceScore * 100).toFixed(1)}%</p>
           </div>
         </div>
         {repositoryData && (
-  <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 mt-6">
-    <h3 className="mb-2 font-semibold">Repository Impact</h3>
+  <div className="rounded-lg border border-cyan-600 bg-gray-800 p-5 mt-6">
+    <h3 className="mb-3 font-semibold text-cyan-400 text-lg">Repository Impact</h3>
 
-    <p className="text-sm mb-2">
-      Total Files Changed: {repositoryData.totalFiles}
+    <p className="text-sm mb-3 text-gray-200">
+      Total Files Changed: <span className="text-cyan-400 font-bold">{repositoryData.totalFiles}</span>
     </p>
 
-    <ul className="list-disc pl-5 text-sm">
+    <ul className="list-disc pl-5 text-sm text-gray-300 space-y-1">
       {repositoryData.changedFiles.map((file, index) => (
-        <li key={index}>{file}</li>
+        <li key={index} className="text-gray-300 hover:text-cyan-400 transition">{file}</li>
       ))}
     </ul>
   </div>
 )}
 
+        {/* Blast Radius Section */}
+        {blastRadius && (
+          <div className="rounded-lg border border-purple-600 bg-gray-800 p-6 mt-6">
+            <h3 className="mb-4 text-lg font-semibold text-purple-400">Blast Radius</h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div className="bg-gray-900 p-4 rounded border border-purple-500">
+                <p className="text-xs text-gray-400 mb-1">Impact Score</p>
+                <p className="text-4xl font-bold text-purple-400">{blastRadius.impactScore}</p>
+              </div>
+              <div className="bg-gray-900 p-4 rounded border border-purple-500">
+                <p className="text-xs text-gray-400 mb-1">Layers Affected</p>
+                <p className="text-4xl font-bold text-purple-400">{blastRadius.affectedLayers.length}</p>
+              </div>
+            </div>
+
+            {blastRadius.affectedLayers.length > 0 && (
+              <div className="mb-4">
+                <p className="text-sm font-semibold text-purple-400 mb-2">Affected Layers</p>
+                <ul className="space-y-2">
+                  {blastRadius.affectedLayers.map((layer) => (
+                    <li key={layer} className="flex items-center gap-2 p-2 bg-gray-900 rounded border border-purple-700 hover:border-purple-500 transition">
+                      <span className="text-purple-400 font-bold">•</span>
+                      <span className="text-sm text-gray-200">{layer} Layer</span>
+                      {blastRadius.layerCounts[layer] && (
+                        <span className="ml-auto text-xs text-gray-300 bg-purple-900 px-2 py-1 rounded">
+                          {blastRadius.layerCounts[layer]} file{blastRadius.layerCounts[layer] !== 1 ? 's' : ''}
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div className="p-3 bg-gray-900 rounded border border-purple-700">
+              <p className="text-sm text-gray-300 italic">{blastRadius.explanation}</p>
+            </div>
+          </div>
+        )}
+
         {/* Footer */}
-        <div className="flex gap-4">
+        <div className="flex gap-4 mt-8">
           {onRetry && (
             <button
               onClick={onRetry}
-              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition font-semibold"
+              className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-lg hover:from-blue-700 hover:to-cyan-700 transition font-semibold shadow-lg"
             >
               Re-analyze
             </button>
           )}
           <button
             onClick={() => window.print()}
-            className="flex-1 px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 transition font-semibold"
+            className="flex-1 px-4 py-3 bg-gray-700 text-gray-100 rounded-lg hover:bg-gray-600 transition font-semibold"
           >
             Print Report
           </button>

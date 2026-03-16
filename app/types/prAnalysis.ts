@@ -54,6 +54,16 @@ export interface RiskScoreBreakdown {
 }
 
 /**
+ * Blast radius information showing which architectural layers are affected
+ */
+export interface BlastRadius {
+  affectedLayers: string[];
+  layerCounts: Record<string, number>;
+  impactScore: number;
+  explanation: string;
+}
+
+/**
  * LLM response container before parsing
  */
 export interface LLMResponseContainer {

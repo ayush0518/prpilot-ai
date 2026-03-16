@@ -3,7 +3,8 @@ import { buildPRContext, PRContext } from "@/app/services/contextBuilder";
 import { createPRPrompt } from "@/app/prompts/prAnalysisPrompt";
 import { parseLLMResponse } from "@/app/utils/parseLLMResponse";
 import { enhanceAnalysisWithRiskScore, determineFinalRiskLevel } from "@/app/core/riskEngine";
-import { PRAnalysisWithRiskScore } from "@/app/types/prAnalysis";
+import { computeBlastRadius } from "@/app/core/blastRadiusEngine";
+import { PRAnalysisWithRiskScore, BlastRadius } from "@/app/types/prAnalysis";
 
 interface GitHubPRData {
   title: string;
@@ -23,6 +24,7 @@ interface AnalysisOutput {
     changedFiles: string[];
     totalFiles: number;
   };
+  blastRadius?: BlastRadius;
 }
 
 /**
@@ -208,13 +210,17 @@ export async function analyzePullRequest(
     // Determine final risk level (uses computed score validation)
     const finalRiskLevel = determineFinalRiskLevel(analysis);
 
+    // Compute blast radius
+    const blastRadius = computeBlastRadius(context.files.map(file => file.filename));
+
     return {
       analysis,
       finalRiskLevel,
       repository: {
         changedFiles: context.files.map(file => file.filename),
         totalFiles: context.files.length
-      }
+      },
+      blastRadius
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
@@ -236,13 +242,17 @@ export async function analyzePRFromData(prData: GitHubPRData): Promise<AnalysisO
     // Determine final risk level
     const finalRiskLevel = determineFinalRiskLevel(analysis);
 
+    // Compute blast radius
+    const blastRadius = computeBlastRadius(prData.files.map(file => file.filename));
+
     return {
       analysis,
       finalRiskLevel,
       repository: {
         changedFiles: prData.files.map(file => file.filename),
         totalFiles: prData.files.length
-      }
+      },
+      blastRadius
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
