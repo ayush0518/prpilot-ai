@@ -1,5 +1,5 @@
 import { analyzePullRequest } from "@/app/services/prAnalyzer";
-import { PRAnalysisWithRiskScore, BlastRadius } from "@/app/types/prAnalysis";
+import { PRAnalysisWithRiskScore, BlastRadius, ComplianceResult, MergeReadiness } from "@/app/types/prAnalysis";
 
 interface AnalyzePRRequest {
   prNumber?: number;
@@ -19,6 +19,8 @@ interface AnalyzePRResponse {
     totalFiles: number;
   };
   blastRadius?: BlastRadius;
+  compliance?: ComplianceResult;
+  mergeReadiness?: MergeReadiness;
   error?: string;
   errorCode?: string;
 }
@@ -105,6 +107,8 @@ export async function POST(req: Request): Promise<Response> {
       finalRiskLevel: result.finalRiskLevel,
       repository: result.repository,
       blastRadius: result.blastRadius,
+      compliance: result.compliance,
+      mergeReadiness: result.mergeReadiness,
     };
 
     return Response.json(response);

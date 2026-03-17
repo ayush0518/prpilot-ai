@@ -97,6 +97,56 @@ function calculateIssueSeverityRisk(analysis: PRAnalysis): number {
 }
 
 /**
+ * Computes dynamic confidence score based on PR characteristics
+ * More data and signals → higher confidence
+ * 
+ * Base: 0.5
+ * +0.15 if >5 files
+ * +0.10 if >15 files
+ * +0.10 if >200 total changes
+ * +0.05 if >1000 total changes
+ * +0.10 if issues found
+ * Cap: 0.95
+ */
+function computeConfidenceScore(
+  prContext: PRContext,
+  analysis: PRAnalysis
+): number {
+  let score = 0.5;
+
+  const totalFiles = prContext.files.length;
+  const totalChanges = prContext.files.reduce(
+    (sum, file) => sum + file.additions + file.deletions,
+    0
+  );
+  const issuesCount = analysis.issues.length;
+
+  // More files = more to analyze = higher confidence
+  if (totalFiles > 5) {
+    score += 0.15;
+  }
+  if (totalFiles > 15) {
+    score += 0.1;
+  }
+
+  // Larger changes = more signal for analysis
+  if (totalChanges > 200) {
+    score += 0.1;
+  }
+  if (totalChanges > 1000) {
+    score += 0.05;
+  }
+
+  // Issues found = clearer analysis signal
+  if (issuesCount > 0) {
+    score += 0.1;
+  }
+
+  // Cap at 0.95 max (always leave room for uncertainty)
+  return Math.min(score, 0.95);
+}
+
+/**
  * Converts numeric score (0-1) to risk level
  */
 function scoreToRiskLevel(score: number): RiskLevel {
@@ -209,7 +259,7 @@ export function calculateRiskScore(
 }
 
 /**
- * Extends analysis with computed risk level
+ * Extends analysis with computed risk level and dynamic confidence score
  */
 export function enhanceAnalysisWithRiskScore(
   analysis: PRAnalysis,
@@ -217,9 +267,13 @@ export function enhanceAnalysisWithRiskScore(
 ): PRAnalysisWithRiskScore {
   const riskScoreBreakdown = calculateRiskScore(analysis, prContext);
   const computedRiskLevel = scoreToRiskLevel(riskScoreBreakdown.finalRiskScore / 100);
+  
+  // Compute dynamic confidence score based on PR characteristics
+  const dynamicConfidenceScore = computeConfidenceScore(prContext, analysis);
 
   return {
     ...analysis,
+    confidenceScore: dynamicConfidenceScore,
     computedRiskLevel,
     riskScoreBreakdown,
   };
@@ -232,12 +286,17 @@ export function enhanceAnalysisWithRiskScore(
 export function determineFinalRiskLevel(
   analysis: PRAnalysisWithRiskScore
 ): RiskLevel {
-  const riskPriority = { LOW: 0, MEDIUM: 1, HIGH: 2 };
+  // Priority map: higher number = higher priority/severity
+  const RISK_PRIORITY = {
+    LOW: 1,
+    MEDIUM: 2,
+    HIGH: 3,
+  };
 
-  const llmRiskValue = riskPriority[analysis.riskLevel];
-  const computedRiskValue = riskPriority[analysis.computedRiskLevel];
+  const llmRiskValue = RISK_PRIORITY[analysis.riskLevel];
+  const computedRiskValue = RISK_PRIORITY[analysis.computedRiskLevel];
 
-  // Return the higher risk level
+  // Return the higher risk level (prioritize worst-case scenario)
   return llmRiskValue >= computedRiskValue
     ? analysis.riskLevel
     : analysis.computedRiskLevel;

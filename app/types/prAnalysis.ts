@@ -54,6 +54,24 @@ export interface RiskScoreBreakdown {
 }
 
 /**
+ * Represents a single file affected within a layer
+ */
+export interface LayerFile {
+  path: string;
+  reason: string;
+  changeType: "core" | "supporting" | "config";
+  isCritical: boolean;
+}
+
+/**
+ * Details for files affected in a specific layer
+ */
+export interface LayerDetailsData {
+  count: number;
+  files: LayerFile[];
+}
+
+/**
  * Blast radius information showing which architectural layers are affected
  */
 export interface BlastRadius {
@@ -61,6 +79,37 @@ export interface BlastRadius {
   layerCounts: Record<string, number>;
   impactScore: number;
   explanation: string;
+  layerDetails: Record<string, LayerDetailsData>;
+}
+
+/**
+ * Compliance detection result for security-sensitive changes
+ */
+export interface ComplianceResult {
+  flags: {
+    auth: boolean;
+    payment: boolean;
+    pii: boolean;
+    security: boolean;
+  };
+  warnings: string[];
+  riskLevel: "LOW" | "MEDIUM" | "HIGH";
+  details: {
+    authFiles: string[];
+    paymentFiles: string[];
+    piiFiles: string[];
+    securityFiles: string[];
+  };
+}
+
+/**
+ * Merge readiness decision - single, deterministic decision for PR merge
+ * Combines all signals: risk, compliance, impact, and confidence
+ */
+export interface MergeReadiness {
+  status: "SAFE" | "CAUTION" | "BLOCK";
+  score: number; // 0-100
+  reason: string;
 }
 
 /**

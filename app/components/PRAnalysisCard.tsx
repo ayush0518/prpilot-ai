@@ -6,7 +6,7 @@
  */
 
 import React from 'react';
-import { PRAnalysisWithRiskScore, IssueType, IssueSeverity, BlastRadius, PRIssue } from '@/app/types/prAnalysis';
+import { PRAnalysisWithRiskScore, IssueType, IssueSeverity, BlastRadius, PRIssue, ComplianceResult } from '@/app/types/prAnalysis';
 
 interface PRAnalysisCardProps {
   analysis: PRAnalysisWithRiskScore;
@@ -18,6 +18,9 @@ interface PRAnalysisCardProps {
     totalFiles: number;
   };
   blastRadius?: BlastRadius | null;
+  compliance?: ComplianceResult | null;
+  expandedLayer?: string | null;
+  setExpandedLayer?: (layer: string | null) => void;
 }
 
 /**
@@ -31,6 +34,20 @@ function getRiskLevelColor(level: 'LOW' | 'MEDIUM' | 'HIGH'): string {
       return 'bg-yellow-900 text-yellow-300 border-yellow-500';
     case 'HIGH':
       return 'bg-red-900 text-red-300 border-red-500';
+  }
+}
+
+/**
+ * Get color classes based on changeType
+ */
+function getChangeTypeBadgeColor(changeType: 'core' | 'supporting' | 'config'): string {
+  switch (changeType) {
+    case 'core':
+      return 'bg-red-600 text-red-100';
+    case 'supporting':
+      return 'bg-blue-600 text-blue-100';
+    case 'config':
+      return 'bg-gray-600 text-gray-100';
   }
 }
 
@@ -116,6 +133,9 @@ export default function PRAnalysisCard({
   onRetry,
   repositoryData,
   blastRadius,
+  compliance,
+  expandedLayer,
+  setExpandedLayer,
 }: PRAnalysisCardProps) {
   const issuesByType: Record<IssueType, number> = {
     bug: 0,
@@ -290,10 +310,10 @@ export default function PRAnalysisCard({
   </div>
 )}
 
-        {/* Blast Radius Section */}
+        {/* Blast Radius Section - Pro Version */}
         {blastRadius && (
           <div className="rounded-lg border border-purple-600 bg-gray-800 p-6 mt-6">
-            <h3 className="mb-4 text-lg font-semibold text-purple-400">Blast Radius</h3>
+            <h3 className="mb-4 text-lg font-semibold text-purple-400">Blast Radius Pro</h3>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <div className="bg-gray-900 p-4 rounded border border-purple-500">
@@ -308,19 +328,54 @@ export default function PRAnalysisCard({
 
             {blastRadius.affectedLayers.length > 0 && (
               <div className="mb-4">
-                <p className="text-sm font-semibold text-purple-400 mb-2">Affected Layers</p>
+                <p className="text-sm font-semibold text-purple-400 mb-3">Affected Layers</p>
                 <ul className="space-y-2">
-                  {blastRadius.affectedLayers.map((layer) => (
-                    <li key={layer} className="flex items-center gap-2 p-2 bg-gray-900 rounded border border-purple-700 hover:border-purple-500 transition">
-                      <span className="text-purple-400 font-bold">•</span>
-                      <span className="text-sm text-gray-200">{layer} Layer</span>
-                      {blastRadius.layerCounts[layer] && (
-                        <span className="ml-auto text-xs text-gray-300 bg-purple-900 px-2 py-1 rounded">
-                          {blastRadius.layerCounts[layer]} file{blastRadius.layerCounts[layer] !== 1 ? 's' : ''}
-                        </span>
-                      )}
-                    </li>
-                  ))}
+                  {blastRadius.affectedLayers.map((layer) => {
+                    const isExpanded = expandedLayer === layer;
+                    const layerDetail = blastRadius.layerDetails?.[layer];
+                    
+                    return (
+                      <div key={layer} className="rounded border border-purple-700 overflow-hidden">
+                        <button
+                          onClick={() => setExpandedLayer?.(isExpanded ? null : layer)}
+                          className="w-full flex items-center gap-2 p-3 bg-gray-900 hover:bg-gray-850 transition cursor-pointer text-left"
+                        >
+                          <span className="text-purple-400 font-bold">{isExpanded ? '▼' : '▶'}</span>
+                          <span className="text-sm text-gray-200 font-medium flex-1">{layer} Layer</span>
+                          {blastRadius.layerCounts[layer] && (
+                            <span className="text-xs text-gray-300 bg-purple-900 px-2 py-1 rounded">
+                              {blastRadius.layerCounts[layer]} file{blastRadius.layerCounts[layer] !== 1 ? 's' : ''}
+                            </span>
+                          )}
+                        </button>
+
+                        {isExpanded && layerDetail && (
+                          <div className="bg-gray-800 border-t border-purple-700 p-3 space-y-2 max-h-96 overflow-y-auto">
+                            {layerDetail.files.map((file, idx) => (
+                              <div key={idx} className="pl-6 py-2 border-l-2 border-purple-600 hover:border-purple-400 transition">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      {file.isCritical && (
+                                        <span className="text-red-400 font-bold text-lg">🔥</span>
+                                      )}
+                                      <p className="text-xs font-mono text-gray-300 truncate" title={file.path}>
+                                        {file.path}
+                                      </p>
+                                    </div>
+                                    <p className="text-xs text-gray-400 mt-1">{file.reason}</p>
+                                  </div>
+                                  <span className={`px-2 py-1 rounded text-xs font-semibold whitespace-nowrap flex-shrink-0 ${getChangeTypeBadgeColor(file.changeType)}`}>
+                                    [{file.changeType}]
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </ul>
               </div>
             )}
@@ -328,6 +383,144 @@ export default function PRAnalysisCard({
             <div className="p-3 bg-gray-900 rounded border border-purple-700">
               <p className="text-sm text-gray-300 italic">{blastRadius.explanation}</p>
             </div>
+          </div>
+        )}
+
+        {/* Compliance & Security Section */}
+        {compliance && (
+          <div className="rounded-lg border border-orange-600 bg-gray-800 p-6 mt-6">
+            <h3 className="mb-4 text-lg font-semibold text-orange-400">Compliance & Security</h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div className="bg-gray-900 p-4 rounded border border-orange-500">
+                <p className="text-xs text-gray-400 mb-1">Risk Level</p>
+                <p className={`text-2xl font-bold ${
+                  compliance.riskLevel === 'HIGH' ? 'text-red-400' :
+                  compliance.riskLevel === 'MEDIUM' ? 'text-yellow-400' :
+                  'text-green-400'
+                }`}>
+                  {compliance.riskLevel}
+                </p>
+              </div>
+              <div className="bg-gray-900 p-4 rounded border border-orange-500">
+                <p className="text-xs text-gray-400 mb-1">Flags Detected</p>
+                <p className="text-2xl font-bold text-orange-400">
+                  {Object.values(compliance.flags).filter(Boolean).length}/4
+                </p>
+              </div>
+            </div>
+
+            {/* Compliance Flags */}
+            <div className="mb-4">
+              <p className="text-sm font-semibold text-orange-400 mb-2">Sensitive Areas Detected</p>
+              <div className="space-y-2">
+                {compliance.flags.auth && (
+                  <div className="flex items-center gap-2 p-2 bg-gray-900 rounded border border-orange-700 hover:border-orange-500 transition">
+                    <span className="text-orange-400 font-bold">⚠</span>
+                    <span className="text-sm text-gray-200">Authentication Logic Changed</span>
+                  </div>
+                )}
+                {compliance.flags.payment && (
+                  <div className="flex items-center gap-2 p-2 bg-gray-900 rounded border border-orange-700 hover:border-orange-500 transition">
+                    <span className="text-orange-400 font-bold">⚠</span>
+                    <span className="text-sm text-gray-200">Payment Flow Detected</span>
+                  </div>
+                )}
+                {compliance.flags.pii && (
+                  <div className="flex items-center gap-2 p-2 bg-gray-900 rounded border border-orange-700 hover:border-orange-500 transition">
+                    <span className="text-orange-400 font-bold">⚠</span>
+                    <span className="text-sm text-gray-200">PII Data Impacted</span>
+                  </div>
+                )}
+                {compliance.flags.security && (
+                  <div className="flex items-center gap-2 p-2 bg-gray-900 rounded border border-orange-700 hover:border-orange-500 transition">
+                    <span className="text-orange-400 font-bold">⚠</span>
+                    <span className="text-sm text-gray-200">Security-Critical Code Modified</span>
+                  </div>
+                )}
+                {!Object.values(compliance.flags).some(Boolean) && (
+                  <div className="flex items-center gap-2 p-2 bg-gray-900 rounded border border-green-700 hover:border-green-500 transition">
+                    <span className="text-green-400 font-bold">✓</span>
+                    <span className="text-sm text-gray-200">No sensitive areas detected</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Warnings */}
+            {compliance.warnings.length > 0 && (
+              <div className="p-3 bg-gray-900 rounded border border-orange-700 mb-4">
+                <p className="text-sm font-semibold text-orange-400 mb-2">Compliance Warnings</p>
+                <ul className="space-y-2">
+                  {compliance.warnings.map((warning, index) => (
+                    <li key={index} className="flex items-start gap-2 text-sm text-gray-300">
+                      <span className="text-orange-400 font-bold mt-0.5">•</span>
+                      <span>{warning}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Compliance File Mapping */}
+            {(compliance.details.authFiles.length > 0 ||
+              compliance.details.paymentFiles.length > 0 ||
+              compliance.details.piiFiles.length > 0 ||
+              compliance.details.securityFiles.length > 0) && (
+              <div className="p-4 bg-gray-900 rounded border border-orange-700">
+                <p className="text-sm font-semibold text-orange-400 mb-3">Affected Files by Category</p>
+                <div className="space-y-3">
+                  {compliance.details.authFiles.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-orange-400 mb-1">🔐 Auth Files</p>
+                      <ul className="space-y-1 ml-2">
+                        {compliance.details.authFiles.map((file, idx) => (
+                          <li key={idx} className="text-xs text-gray-300 font-mono truncate" title={file}>
+                            • {file}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {compliance.details.paymentFiles.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-orange-400 mb-1">💳 Payment Files</p>
+                      <ul className="space-y-1 ml-2">
+                        {compliance.details.paymentFiles.map((file, idx) => (
+                          <li key={idx} className="text-xs text-gray-300 font-mono truncate" title={file}>
+                            • {file}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {compliance.details.piiFiles.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-orange-400 mb-1">👤 PII Files</p>
+                      <ul className="space-y-1 ml-2">
+                        {compliance.details.piiFiles.map((file, idx) => (
+                          <li key={idx} className="text-xs text-gray-300 font-mono truncate" title={file}>
+                            • {file}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {compliance.details.securityFiles.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-orange-400 mb-1">🛡️ Security Files</p>
+                      <ul className="space-y-1 ml-2">
+                        {compliance.details.securityFiles.map((file, idx) => (
+                          <li key={idx} className="text-xs text-gray-300 font-mono truncate" title={file}>
+                            • {file}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
 

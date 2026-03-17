@@ -4,7 +4,9 @@ import { createPRPrompt } from "@/app/prompts/prAnalysisPrompt";
 import { parseLLMResponse } from "@/app/utils/parseLLMResponse";
 import { enhanceAnalysisWithRiskScore, determineFinalRiskLevel } from "@/app/core/riskEngine";
 import { computeBlastRadius } from "@/app/core/blastRadiusEngine";
-import { PRAnalysisWithRiskScore, BlastRadius } from "@/app/types/prAnalysis";
+import { analyzeCompliance } from "@/app/core/complianceEngine";
+import { computeMergeReadiness } from "@/app/core/mergeReadinessEngine";
+import { PRAnalysisWithRiskScore, BlastRadius, ComplianceResult, MergeReadiness } from "@/app/types/prAnalysis";
 
 interface GitHubPRData {
   title: string;
@@ -19,12 +21,14 @@ interface GitHubPRData {
 
 interface AnalysisOutput {
   analysis: PRAnalysisWithRiskScore;
-  finalRiskLevel: "LOW" | "MEDIUM" | "HIGH";
+  finalRiskLevel: "LOW" | "MEDIUM" | "HIGH"; // 🔥 SINGLE SOURCE OF TRUTH - UI must use only this value, not analysis.riskLevel or analysis.computedRiskLevel
   repository?: {
     changedFiles: string[];
     totalFiles: number;
   };
   blastRadius?: BlastRadius;
+  compliance?: ComplianceResult;
+  mergeReadiness?: MergeReadiness; // 🔥 Single merge decision for the PR
 }
 
 /**
@@ -213,6 +217,17 @@ export async function analyzePullRequest(
     // Compute blast radius
     const blastRadius = computeBlastRadius(context.files.map(file => file.filename));
 
+    // Analyze compliance
+    const compliance = analyzeCompliance(context.files.map(file => file.filename));
+
+    // Compute merge readiness (all signals combined)
+    const mergeReadiness = computeMergeReadiness({
+      finalRiskLevel,
+      complianceRisk: compliance.riskLevel,
+      impactScore: blastRadius.impactScore,
+      confidenceScore: analysis.confidenceScore
+    });
+
     return {
       analysis,
       finalRiskLevel,
@@ -220,7 +235,9 @@ export async function analyzePullRequest(
         changedFiles: context.files.map(file => file.filename),
         totalFiles: context.files.length
       },
-      blastRadius
+      blastRadius,
+      compliance,
+      mergeReadiness
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
@@ -245,6 +262,17 @@ export async function analyzePRFromData(prData: GitHubPRData): Promise<AnalysisO
     // Compute blast radius
     const blastRadius = computeBlastRadius(prData.files.map(file => file.filename));
 
+    // Analyze compliance
+    const compliance = analyzeCompliance(prData.files.map(file => file.filename));
+
+    // Compute merge readiness (all signals combined)
+    const mergeReadiness = computeMergeReadiness({
+      finalRiskLevel,
+      complianceRisk: compliance.riskLevel,
+      impactScore: blastRadius.impactScore,
+      confidenceScore: analysis.confidenceScore
+    });
+
     return {
       analysis,
       finalRiskLevel,
@@ -252,7 +280,9 @@ export async function analyzePRFromData(prData: GitHubPRData): Promise<AnalysisO
         changedFiles: prData.files.map(file => file.filename),
         totalFiles: prData.files.length
       },
-      blastRadius
+      blastRadius,
+      compliance,
+      mergeReadiness
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";

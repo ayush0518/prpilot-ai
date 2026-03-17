@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import PRAnalysisCard from "./components/PRAnalysisCard";
-import { PRAnalysisWithRiskScore, BlastRadius } from "@/app/types/prAnalysis";
+import { PRAnalysisWithRiskScore, BlastRadius, ComplianceResult, MergeReadiness } from "@/app/types/prAnalysis";
 
 type AnalysisResult = {
   analysis: PRAnalysisWithRiskScore;
@@ -29,6 +29,9 @@ export default function Home() {
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null)
   const [repositoryData, setRepositoryData] = useState<RepositoryData | undefined>()
   const [blastRadius, setBlastRadius] = useState<BlastRadius | null>(null)
+  const [compliance, setCompliance] = useState<ComplianceResult | null>(null)
+  const [mergeReadiness, setMergeReadiness] = useState<MergeReadiness | null>(null)
+  const [expandedLayer, setExpandedLayer] = useState<string | null>(null)
 
   const handleAnalyze = async () => {
     const trimmedPrUrl = prUrl.trim();
@@ -81,6 +84,8 @@ export default function Home() {
       });
       setRepositoryData(data.repository);
       setBlastRadius(data.blastRadius);
+      setCompliance(data.compliance);
+      setMergeReadiness(data.mergeReadiness);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Something went wrong. Please try again.";
@@ -97,7 +102,7 @@ export default function Home() {
         <header className="space-y-2">
           <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">MergeMind</h1>
           <p className="text-gray-400">
-            Analyze pull requests instantly from your git diff or GitHub PR link
+            Analyze pull requests instantly from your GitHub PR link
           </p>
         </header>
 
@@ -106,7 +111,7 @@ export default function Home() {
         <section className="rounded-xl bg-gray-900 p-6 shadow-lg border border-gray-800">
           <div className="mb-6">
             <label htmlFor="github-pr-url" className="mb-3 block text-sm font-medium text-cyan-400">
-              GitHub PR URL (Optional)
+              GitHub PR URL
             </label>
             <input
               id="github-pr-url"
@@ -153,6 +158,86 @@ export default function Home() {
           {error ? <p className="mt-3 text-sm text-red-400">{error}</p> : null}
         </section>
 
+        {/* Merge Decision Section */}
+        {analysisResult && mergeReadiness && (
+          <section className={`rounded-xl p-6 shadow-lg border-2 ${
+            mergeReadiness.status === "SAFE"
+              ? "bg-green-950 border-green-700"
+              : mergeReadiness.status === "CAUTION"
+              ? "bg-yellow-950 border-yellow-700"
+              : "bg-red-950 border-red-700"
+          }`}>
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <span className="text-4xl">
+                  {mergeReadiness.status === "SAFE"
+                    ? "✅"
+                    : mergeReadiness.status === "CAUTION"
+                    ? "⚠️"
+                    : "🛑"}
+                </span>
+                <div>
+                  <h2 className={`text-2xl font-bold ${
+                    mergeReadiness.status === "SAFE"
+                      ? "text-green-400"
+                      : mergeReadiness.status === "CAUTION"
+                      ? "text-yellow-400"
+                      : "text-red-400"
+                  }`}>
+                    {mergeReadiness.status === "SAFE"
+                      ? "READY TO MERGE"
+                      : mergeReadiness.status === "CAUTION"
+                      ? "MERGE WITH CAUTION"
+                      : "MERGE BLOCKED"}
+                  </h2>
+                  <p className="text-sm text-gray-400 mt-1">
+                    Merge Decision Based on All Signals
+                  </p>
+                </div>
+              </div>
+
+              <div className={`rounded-lg p-4 ${
+                mergeReadiness.status === "SAFE"
+                  ? "bg-green-900/30"
+                  : mergeReadiness.status === "CAUTION"
+                  ? "bg-yellow-900/30"
+                  : "bg-red-900/30"
+              }`}>
+                <p className="text-gray-100 whitespace-normal break-words">
+                  <span className="font-semibold">Reason:</span> {mergeReadiness.reason}
+                </p>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-300">Total Risk Score</span>
+                <div className="flex items-center gap-2">
+                  <div className="w-32 bg-gray-700 rounded-full h-3 overflow-hidden">
+                    <div
+                      className={`h-full ${
+                        mergeReadiness.score < 40
+                          ? "bg-green-500"
+                          : mergeReadiness.score < 70
+                          ? "bg-yellow-500"
+                          : "bg-red-500"
+                      }`}
+                      style={{ width: `${mergeReadiness.score}%` }}
+                    />
+                  </div>
+                  <span className={`font-bold text-lg ${
+                    mergeReadiness.score < 40
+                      ? "text-green-400"
+                      : mergeReadiness.score < 70
+                      ? "text-yellow-400"
+                      : "text-red-400"
+                  }`}>
+                    {mergeReadiness.score}/100
+                  </span>
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+
         <section className="rounded-xl bg-gray-900 p-6 shadow-lg border border-gray-800">
           <h2 className="mb-4 text-xl font-semibold text-cyan-400">PR Analysis</h2>
 
@@ -169,6 +254,9 @@ export default function Home() {
               isLoading={isAnalyzing}
               repositoryData={repositoryData}
               blastRadius={blastRadius}
+              compliance={compliance}
+              expandedLayer={expandedLayer}
+              setExpandedLayer={setExpandedLayer}
             />
           )}
         </section>
