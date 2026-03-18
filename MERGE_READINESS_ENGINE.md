@@ -11,7 +11,7 @@ This engine combines:
 - Blast radius impact score (0-100)
 - Confidence score (0-1)
 
-**Output:** A single decision with status (SAFE | CAUTION | BLOCK), risk score (0-100), and human-readable reason.
+**Output:** A single decision with status (SAFE | CAUTION | BLOCK), risk score (0-100), and human-readable reason to be tested for github app.
 
 ---
 
