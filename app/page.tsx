@@ -47,11 +47,11 @@ export default function Home() {
       });
 
       const data = await response.json();
-
+      console.log(data)
       if (!response.ok) {
         throw new Error(data.error || "Failed to analyze PR.");
       }
-
+  
       setAnalysisOutput(data);
     } catch (err) {
       const message =
