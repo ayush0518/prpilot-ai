@@ -4,6 +4,13 @@ import { createAppAuth } from "@octokit/auth-app";
 import { analyzePR } from "@/app/services/analyzePR";
 import { generatePRComment } from "@/app/utils/prCommentFormatter";
 
+const originalFetch = global.fetch;
+
+global.fetch = async (...args) => {
+  console.log("🔥 FETCH CALLED:", args[0]);
+  return originalFetch(...args);
+};
+
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
