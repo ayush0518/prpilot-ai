@@ -82,7 +82,9 @@ function validateAnalysisStructure(data: unknown): data is PRAnalysis {
 
   // Validate confidence score range
   const confidenceValid =
-    obj.confidenceScore >= 0 && obj.confidenceScore <= 1;
+    typeof obj.confidenceScore === "number" &&
+    obj.confidenceScore >= 0 &&
+    obj.confidenceScore <= 1;
 
   return issuesValid && improvementsValid && confidenceValid;
 }

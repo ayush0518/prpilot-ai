@@ -7,12 +7,14 @@
  */
 
 /**
- * Merge readiness decision output
+ * Merge readiness decision output (with confidence included)
  */
 export type MergeReadiness = {
   status: "SAFE" | "CAUTION" | "BLOCK";
   score: number; // 0-100
   reason: string;
+  confidenceLevel: "HIGH" | "MEDIUM" | "LOW"; // Deterministic confidence override
+  confidenceScore: number; // 0-1 (normalized confidence)
 };
 
 /**
@@ -23,6 +25,7 @@ export interface MergeReadinessInput {
   complianceRisk: "LOW" | "MEDIUM" | "HIGH";
   impactScore: number; // 0-100
   confidenceScore: number; // 0-1
+  totalFiles: number; // Number of files changed (for deterministic confidence)
 }
 
 // ===== PART 2: RISK WEIGHT MAPPING =====
@@ -31,6 +34,58 @@ const RISK_WEIGHT = {
   MEDIUM: 2,
   HIGH: 3,
 };
+
+// ===== PART 2B: DETERMINISTIC CONFIDENCE CALCULATION =====
+/**
+ * Overrides LLM confidence with deterministic logic based on PR size and impact
+ * 
+ * Rules:
+ * - HIGH: If totalFiles < 5 AND impactScore < 20 (small, focused change)
+ * - MEDIUM: If totalFiles < 20 (moderate PR size)
+ * - LOW: Otherwise (large or complex PR)
+ */
+function calculateDeterministicConfidence(totalFiles: number, impactScore: number): "HIGH" | "MEDIUM" | "LOW" {
+  if (totalFiles < 5 && impactScore < 20) {
+    return "HIGH";
+  }
+  if (totalFiles < 20) {
+    return "MEDIUM";
+  }
+  return "LOW";
+}
+
+/**
+ * Converts LLM confidence score (0-1) using weighted formula
+ * Formula: confidenceScore = 1 - (diffSizeWeight * diffSizeRisk) - (complexityWeight * issueSeverityRisk) - (ambiguityWeight * unknownFactors)
+ * 
+ * Input: LLM confidence (0-1), totalFiles, impactScore
+ * Output: Normalized confidence score (0-1)
+ */
+function normalizeConfidenceScore(llmConfidence: number, totalFiles: number, impactScore: number): number {
+  // Weights for different risk factors
+  const diffSizeWeight = 0.3;
+  const complexityWeight = 0.4;
+  const ambiguityWeight = 0.3;
+  
+  // Calculate diff size risk (higher files = higher risk to confidence)
+  const diffSizeRisk = Math.min(totalFiles / 100, 1); // 0-1, caps at 100 files
+  
+  // Calculate complexity risk (based on impact score)
+  const issueSeverityRisk = impactScore / 100; // Normalize impact to 0-1
+  
+  // Unknown factors (based on inverse of LLM confidence)
+  const unknownFactors = 1 - llmConfidence;
+  
+  // Apply weighted formula
+  let confidenceScore = 
+    1 - 
+    (diffSizeWeight * diffSizeRisk) - 
+    (complexityWeight * issueSeverityRisk) - 
+    (ambiguityWeight * unknownFactors);
+  
+  // Clamp to 0-1 range
+  return Math.max(0, Math.min(1, confidenceScore));
+}
 
 /**
  * PART 3: Calculate combined risk score using weighted + rule-based logic
@@ -50,27 +105,32 @@ function calculateCombinedScore(input: MergeReadinessInput): number {
   // Step 2: Normalize impact to 0-1
   const impactFactor = input.impactScore / 100;
   
-  // Step 3: Confidence is already 0-1
+  // Step 3: Calculate normalized confidence score using the weighted formula
+  const normalizedConfidence = normalizeConfidenceScore(input.confidenceScore, input.totalFiles, input.impactScore);
+  
+  // Step 4: Confidence adjustment (low confidence = increase caution)
   const confidenceFactor =
-    input.confidenceScore < 0.6
-      ? 1.1 // increase caution
-      : input.confidenceScore > 0.85
-      ? 0.9 // slightly reduce risk
+    normalizedConfidence < 0.4
+      ? 1.2 // Significantly increase caution for low confidence
+      : normalizedConfidence < 0.6
+      ? 1.1 // Moderately increase caution for medium-low confidence
+      : normalizedConfidence > 0.8
+      ? 0.85 // Slightly reduce risk for high confidence
       : 1;
   
-  // Step 4: Base risk (blend risk signals)
+  // Step 5: Base risk (blend risk signals)
   const baseRisk = llmRisk;
   
-  // Step 5: Combined score = weighted formula
+  // Step 6: Combined score = weighted formula
   let finalScore =
     (baseRisk * 0.4 +
      complianceWeighted * 0.3 +
      impactFactor * 0.3) * 100;
   
-  // Step 6: Apply confidence adjustment
+  // Step 7: Apply confidence adjustment
   finalScore = finalScore * confidenceFactor;
   
-  // Step 7: Clamp to 0-100
+  // Step 8: Clamp to 0-100
   finalScore = Math.max(0, Math.min(100, finalScore));
   
   return finalScore;
@@ -174,21 +234,29 @@ export function computeMergeReadiness(input: MergeReadinessInput): MergeReadines
   // Step 1: Calculate combined score (0-100)
   const score = calculateCombinedScore(input);
 
-  // Step 2: Apply decision rules FIRST
+  // Step 2: Calculate deterministic confidence level
+  const confidenceLevel = calculateDeterministicConfidence(input.totalFiles, input.impactScore);
+  
+  // Step 3: Normalize confidence score using weighted formula
+  const normalizedConfidenceScore = normalizeConfidenceScore(input.confidenceScore, input.totalFiles, input.impactScore);
+
+  // Step 4: Apply decision rules FIRST
   let status = determineStatusByRules(input, score);
 
-  // Step 3: Fallback to score-based decision if no rule applies
+  // Step 5: Fallback to score-based decision if no rule applies
   if (status === null) {
     status = determineStatusByScore(score);
   }
 
-  // Step 4: Generate reason
+  // Step 6: Generate reason
   const reason = generateReason(input, score);
 
   return {
     status,
     score: Math.round(score),
     reason,
+    confidenceLevel,
+    confidenceScore: normalizedConfidenceScore,
   };
 }
 

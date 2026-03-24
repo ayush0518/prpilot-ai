@@ -225,7 +225,8 @@ export async function analyzePullRequest(
       finalRiskLevel,
       complianceRisk: compliance.riskLevel,
       impactScore: blastRadius.impactScore,
-      confidenceScore: analysis.confidenceScore
+      confidenceScore: analysis.confidenceScore,
+      totalFiles: context.files.length,
     });
 
     return {
@@ -270,7 +271,8 @@ export async function analyzePRFromData(prData: GitHubPRData): Promise<AnalysisO
       finalRiskLevel,
       complianceRisk: compliance.riskLevel,
       impactScore: blastRadius.impactScore,
-      confidenceScore: analysis.confidenceScore
+      confidenceScore: analysis.confidenceScore,
+      totalFiles: prData.files.length,
     });
 
     return {

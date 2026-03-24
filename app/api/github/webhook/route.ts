@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Octokit } from "@octokit/rest";
 import { createAppAuth } from "@octokit/auth-app";
+import { generatePRComment } from "@/app/utils/prCommentFormatter";
 
 export async function POST(req: NextRequest) {
   try {
@@ -45,8 +46,15 @@ export async function POST(req: NextRequest) {
           },
         });
 
-        // STEP 3 — Format comment
-        const body = formatComment(data);
+        // STEP 3 — Format comment using new formatter
+        const body = generatePRComment({
+          analysis: data.analysis,
+          mergeReadiness: data.mergeReadiness,
+          blastRadius: data.blastRadius,
+          compliance: data.compliance,
+          repository: data.repository,
+          appUrl: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+        });
 
         // STEP 4 — Post comment
         await octokit.issues.createComment({
@@ -67,59 +75,4 @@ export async function POST(req: NextRequest) {
   }
 }
 
-function formatComment(data: any) {
-  const decision = data.mergeReadiness;
 
-  const emoji =
-    decision.status === "SAFE"
-      ? "🟢"
-      : decision.status === "CAUTION"
-        ? "🟡"
-        : "🔴";
-
-  return `
-## 🤖 MergeMind Analysis
-
-### ${emoji} ${decision.status}
-
-**Reason:** ${decision.reason}
-
----
-
-### 🔍 Key Insights
-
-* Risk: ${data.finalRiskLevel}
-* Impact Score: ${data.blastRadius.impactScore}
-* Compliance: ${data.compliance.riskLevel}
-
----
-
-### 🔥 Critical Files
-
-${getCriticalFiles(data)}
-
----
-
-### ✅ Suggested Improvements
-
-${data.analysis.improvements
-  .map((i: string) => `- ${i}`)
-  .join("\n")}
-`;
-}
-
-function getCriticalFiles(data: any) {
-  const layers = data.blastRadius.layerDetails;
-
-  const criticalFiles: string[] = [];
-
-  Object.values(layers).forEach((layer: any) => {
-    layer.files.forEach((file: any) => {
-      if (file.isCritical) {
-        criticalFiles.push(`- ${file.path}`);
-      }
-    });
-  });
-
-  return criticalFiles.join("\n") || "None";
-}
