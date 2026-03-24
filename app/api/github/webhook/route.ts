@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
 
         // STEP 1 — Call MergeMind analyzer
         const analysisResponse = await fetch(
-          "http://localhost:3000/api/analyze-pr/v2",
+          `${process.env.APP_URL}/api/analyze-pr/v2`,
           {
             method: "POST",
             headers: {
