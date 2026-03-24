@@ -1,4 +1,4 @@
-import { analyzePullRequest } from "@/app/services/prAnalyzer";
+import { analyzePR } from "@/app/services/analyzePR";
 import { PRAnalysisWithRiskScore, BlastRadius, ComplianceResult, MergeReadiness } from "@/app/types/prAnalysis";
 
 /**
@@ -12,6 +12,7 @@ import { PRAnalysisWithRiskScore, BlastRadius, ComplianceResult, MergeReadiness 
  * because env vars don't exist during build
  */
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 interface AnalyzePRRequest {
   prNumber?: number;
@@ -52,10 +53,11 @@ export async function POST(req: Request): Promise<Response> {
 
     console.log("DEBUG: Incoming v2 request body:", JSON.stringify(body));
 
-    let prIdentifier: string;
+    let prUrl: string;
+    const hasPrNumber = typeof body.prNumber === "number" && Number.isFinite(body.prNumber);
 
     // Format 1: prNumber only (requires GITHUB_REPO env var)
-    if (body.prNumber && !body.owner && !body.repo && !body.url && !body.prUrl && !body.pr_url) {
+    if (hasPrNumber && !body.owner && !body.repo && !body.url && !body.prUrl && !body.pr_url) {
       const gitHubRepo = process.env.GITHUB_REPO;
       if (!gitHubRepo) {
         return Response.json(
@@ -64,18 +66,18 @@ export async function POST(req: Request): Promise<Response> {
             error: "GITHUB_REPO environment variable must be set or provide owner/repo",
             errorCode: "MISSING_ENV",
           } as AnalyzePRResponse,
-          { status: 400 }
-        );
+            { status: 400 }
+          );
       }
-      prIdentifier = `${gitHubRepo}#${body.prNumber}`;
+      prUrl = `https://github.com/${gitHubRepo}/pull/${body.prNumber}`;
     }
     // Format 2: owner, repo, and prNumber
-    else if (body.owner && body.repo && body.prNumber) {
-      prIdentifier = `${body.owner}/${body.repo}#${body.prNumber}`;
+    else if (body.owner && body.repo && hasPrNumber) {
+      prUrl = `https://github.com/${body.owner}/${body.repo}/pull/${body.prNumber}`;
     }
     // Format 3: Full URL (supports url, prUrl, and pr_url fields)
     else if (body.url || body.prUrl || body.pr_url) {
-      prIdentifier = (body.url || body.prUrl || body.pr_url) as string;
+      prUrl = (body.url || body.prUrl || body.pr_url) as string;
     } else {
       return Response.json(
         {
@@ -87,31 +89,15 @@ export async function POST(req: Request): Promise<Response> {
       );
     }
 
-    // Validate required environment variables
-    if (!process.env.GITHUB_TOKEN) {
-      return Response.json(
-        {
-          success: false,
-          error: "GITHUB_TOKEN environment variable is not set",
-          errorCode: "MISSING_ENV",
-        } as AnalyzePRResponse,
-        { status: 500 }
-      );
-    }
-
-    if (!process.env.OPENAI_API_KEY) {
-      return Response.json(
-        {
-          success: false,
-          error: "OPENAI_API_KEY environment variable is not set",
-          errorCode: "MISSING_ENV",
-        } as AnalyzePRResponse,
-        { status: 500 }
-      );
-    }
+    console.log("DEBUG: Resolved PR URL for v2 analysis", {
+      prUrl,
+      hasGithubToken: Boolean(process.env.GITHUB_TOKEN),
+      hasOpenAIKey: Boolean(process.env.OPENAI_API_KEY),
+      hasGithubRepo: Boolean(process.env.GITHUB_REPO),
+    });
 
     // Perform analysis
-    const result = await analyzePullRequest(prIdentifier);
+    const result = await analyzePR(prUrl);
 
     const response: AnalyzePRResponse = {
       success: true,
@@ -139,6 +125,9 @@ export async function POST(req: Request): Promise<Response> {
     } else if (errorMessage.includes("401") || errorMessage.includes("Unauthorized")) {
       status = 401;
       errorCode = "UNAUTHORIZED";
+    } else if (errorMessage.includes("Missing required environment variable")) {
+      status = 500;
+      errorCode = "MISSING_ENV";
     } else if (errorMessage.includes("token")) {
       status = 401;
       errorCode = "TOKEN_ERROR";

@@ -31,6 +31,42 @@ interface AnalysisOutput {
   mergeReadiness?: MergeReadiness; // 🔥 Single merge decision for the PR
 }
 
+async function readResponseBody(response: Response): Promise<string> {
+  try {
+    const text = await response.text();
+    if (!text) {
+      return "<empty>";
+    }
+    return text.slice(0, 3000);
+  } catch {
+    return "<failed to read response body>";
+  }
+}
+
+async function fetchGitHubJSON<T>(url: string, token: string): Promise<T> {
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `token ${token}`,
+      Accept: "application/vnd.github.v3+json",
+    },
+  });
+
+  if (!response.ok) {
+    const responseBody = await readResponseBody(response);
+    console.error("[prAnalyzer] GitHub API request failed", {
+      url,
+      status: response.status,
+      statusText: response.statusText,
+      responseBody,
+    });
+    throw new Error(
+      `Failed GitHub API request (${response.status} ${response.statusText}): ${responseBody}`
+    );
+  }
+
+  return (await response.json()) as T;
+}
+
 /**
  * Parses GitHub PR URL to extract owner, repo, and PR number
  */
@@ -56,23 +92,11 @@ async function fetchPRDetails(owner: string, repo: string, prNumber: string): Pr
   }
 
   const url = `https://api.github.com/repos/${owner}/${repo}/pulls/${prNumber}`;
-
-  const response = await fetch(url, {
-    headers: {
-      Authorization: `token ${token}`,
-      Accept: "application/vnd.github.v3+json",
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch PR: ${response.statusText}`);
-  }
-
-  const data = await response.json();
+  const data = await fetchGitHubJSON<Record<string, unknown>>(url, token);
 
   return {
-    title: data.title,
-    body: data.body || "",
+    title: String(data.title || ""),
+    body: String(data.body || ""),
     files: [], // Will be fetched separately
   };
 }
@@ -98,19 +122,7 @@ async function fetchPRFiles(
   }
 
   const url = `https://api.github.com/repos/${owner}/${repo}/pulls/${prNumber}/files`;
-
-  const response = await fetch(url, {
-    headers: {
-      Authorization: `token ${token}`,
-      Accept: "application/vnd.github.v3+json",
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch PR files: ${response.statusText}`);
-  }
-
-  const files = await response.json();
+  const files = await fetchGitHubJSON<Array<Record<string, unknown>>>(url, token);
 
   return files.map((file: Record<string, unknown>) => ({
     filename: String(file.filename || ""),
