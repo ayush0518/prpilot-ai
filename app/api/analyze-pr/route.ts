@@ -9,9 +9,12 @@ type PRAnalysisResponse = {
   test_cases: string[];
 };
 
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+/**
+ * ⚡ CRITICAL: Force dynamic evaluation for this route
+ * Without this, Next.js attempts static optimization at build time,
+ * but OPENAI_API_KEY is undefined during build → module load fails
+ */
+export const dynamic = "force-dynamic";
 
 const MAX_DIFF_CHARS = 200_000;
 const MAX_DIFF_LINES = 1_500;
@@ -132,6 +135,11 @@ Return JSON only. Do not include markdown fences.
 Git Diff:
 ${trimmedDiff}
 `;
+
+    // ⚡ Initialize OpenAI client inside handler (runtime-only)
+    const client = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
 
     const completion = await client.chat.completions.create({
       model: "gpt-4.1-mini",
