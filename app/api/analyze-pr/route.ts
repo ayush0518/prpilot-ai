@@ -53,19 +53,65 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     const diff = body?.diff;
+    const pr_url = body?.pr_url;
 
-    if (typeof diff !== "string" || !diff.trim()) {
-      return Response.json({ error: "Git diff is required" }, { status: 400 });
+    let finalDiff: string;
+
+    // Handle GitHub PR URL
+    if (pr_url) {
+      if (typeof pr_url !== "string") {
+        return Response.json({ error: "pr_url must be a string" }, { status: 400 });
+      }
+
+      const urlMatch = pr_url.match(/github\.com\/([^\/]+)\/([^\/]+)\/pull\/(\d+)/);
+      if (!urlMatch) {
+        return Response.json(
+          {
+            error: "Invalid GitHub PR URL format. Use: https://github.com/owner/repo/pull/number",
+          },
+          { status: 400 }
+        );
+      }
+
+      const [, owner, repo, pullNumber] = urlMatch;
+      const diffUrl = `https://patch-diff.githubusercontent.com/raw/${owner}/${repo}/pull/${pullNumber}.diff`;
+
+      try {
+        const diffResponse = await fetch(diffUrl);
+        if (!diffResponse.ok) {
+          return Response.json(
+            { error: `Failed to fetch PR diff from GitHub (status: ${diffResponse.status})` },
+            { status: 400 }
+          );
+        }
+        finalDiff = await diffResponse.text();
+      } catch (error) {
+        return Response.json(
+          { error: "Failed to fetch PR from GitHub. Please check the URL and try again." },
+          { status: 400 }
+        );
+      }
+    } else if (diff) {
+      // Handle manual diff input
+      if (typeof diff !== "string" || !diff.trim()) {
+        return Response.json({ error: "Git diff is required" }, { status: 400 });
+      }
+      finalDiff = diff;
+    } else {
+      return Response.json(
+        { error: "Either 'diff' or 'pr_url' is required" },
+        { status: 400 }
+      );
     }
 
-    if (diff.length > MAX_DIFF_CHARS) {
+    if (finalDiff.length > MAX_DIFF_CHARS) {
       return Response.json(
         { error: `Diff is too large. Keep it under ${MAX_DIFF_CHARS.toLocaleString()} characters.` },
         { status: 413 }
       );
     }
 
-    const trimmedDiff = diff.split("\n").slice(0, MAX_DIFF_LINES).join("\n");
+    const trimmedDiff = finalDiff.split("\n").slice(0, MAX_DIFF_LINES).join("\n");
 
     const prompt = `
 You are a senior software engineer reviewing a pull request.

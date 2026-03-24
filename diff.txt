@@ -1,0 +1,800 @@
+commit 831927c8ca28b5e5eec0c6be339db62cfb825226
+Author: ayush0518 <ayush0518@gmail.com>
+Date:   Sun Mar 8 21:15:09 2026 +0530
+
+    Initial commit for pr-pilot Ai MVP
+---
+ .gitignore                |   41 +
+ README.md                 |   36 +
+ app/api/generate/route.ts |   85 +
+ app/favicon.ico           |  Bin 0 -> 25931 bytes
+ app/globals.css           |   26 +
+ app/layout.tsx            |   34 +
+ app/page.tsx              |  185 ++
+ eslint.config.mjs         |   18 +
+ next.config.ts            |    7 +
+ package-lock.json         | 6614 +++++++++++++++++++++++++++++++++++++++++++++
+ package.json              |   27 +
+ postcss.config.mjs        |    7 +
+ public/file.svg           |    1 +
+ public/globe.svg          |    1 +
+ public/next.svg           |    1 +
+ public/vercel.svg         |    1 +
+ public/window.svg         |    1 +
+ tsconfig.json             |   34 +
+ 18 files changed, 7119 insertions(+)
+
+diff --git a/.gitignore b/.gitignore
+new file mode 100644
+index 0000000..5ef6a52
+--- /dev/null
++++ b/.gitignore
+@@ -0,0 +1,41 @@
++# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
++
++# dependencies
++/node_modules
++/.pnp
++.pnp.*
++.yarn/*
++!.yarn/patches
++!.yarn/plugins
++!.yarn/releases
++!.yarn/versions
++
++# testing
++/coverage
++
++# next.js
++/.next/
++/out/
++
++# production
++/build
++
++# misc
++.DS_Store
++*.pem
++
++# debug
++npm-debug.log*
++yarn-debug.log*
++yarn-error.log*
++.pnpm-debug.log*
++
++# env files (can opt-in for committing if needed)
++.env*
++
++# vercel
++.vercel
++
++# typescript
++*.tsbuildinfo
++next-env.d.ts
+diff --git a/README.md b/README.md
+new file mode 100644
+index 0000000..e215bc4
+--- /dev/null
++++ b/README.md
+@@ -0,0 +1,36 @@
++This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
++
++## Getting Started
++
++First, run the development server:
++
++```bash
++npm run dev
++# or
++yarn dev
++# or
++pnpm dev
++# or
++bun dev
++```
++
++Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
++
++You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
++
++This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
++
++## Learn More
++
++To learn more about Next.js, take a look at the following resources:
++
++- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
++- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
++
++You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
++
++## Deploy on Vercel
++
++The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
++
++Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+diff --git a/app/api/generate/route.ts b/app/api/generate/route.ts
+new file mode 100644
+index 0000000..5626065
+--- /dev/null
++++ b/app/api/generate/route.ts
+@@ -0,0 +1,85 @@
++import OpenAI from "openai"
++
++const client = new OpenAI({
++  apiKey: process.env.OPENAI_API_KEY,
++})
++
++
++export async function POST(req: Request) {
++  try {
++    const body = await req.json()
++    const diff = body.diff
++
++    if (!diff) {
++      return Response.json(
++        { error: "Git diff is required" },
++        { status: 400 }
++      )
++    }
++
++    const MAX_DIFF_LENGTH = 4000
++
++    const trimmedDiff =
++      diff.length > MAX_DIFF_LENGTH
++        ? diff.slice(0, MAX_DIFF_LENGTH)
++        : diff
++
++const prompt = `
++You are a senior software engineer.
++
++Analyze the following git diff and generate a GitHub PR description.
++
++Return the response strictly in JSON format like this:
++
++{
++  "summary": "...",
++  "keyChanges": ["...", "..."],
++  "testingSteps": ["...", "..."],
++  "changelog": "..."
++}
++
++Git diff:
++${trimmedDiff}
++`
++
++    const completion = await client.chat.completions.create({
++      model: "gpt-4.1-mini",
++      response_format: { type: "json_object" },
++      messages: [
++        { role: "user", content: prompt }
++      ],
++    })
++
++const content = completion.choices[0]?.message.content
++
++if (!content || typeof content !== "string") {
++  return Response.json(
++    { error: "Empty response from OpenAI" },
++    { status: 500 }
++  );
++}
++
++let parsed
++
++try {
++  parsed = JSON.parse(content)
++} catch {
++  parsed = {
++    summary: "Unable to parse AI response",
++    keyChanges: [],
++    testingSteps: [],
++    changelog: ""
++  }
++}
++
++return Response.json(parsed)
++
++  } catch (error) {
++    console.error(error)
++
++    return Response.json(
++      { error: "AI generation failed" },
++      { status: 500 }
++    )
++  }
++}
+diff --git a/app/favicon.ico b/app/favicon.ico
+new file mode 100644
+index 0000000..718d6fe
+Binary files /dev/null and b/app/favicon.ico differ
+diff --git a/app/globals.css b/app/globals.css
+new file mode 100644
+index 0000000..a2dc41e
+--- /dev/null
++++ b/app/globals.css
+@@ -0,0 +1,26 @@
++@import "tailwindcss";
++
++:root {
++  --background: #ffffff;
++  --foreground: #171717;
++}
++
++@theme inline {
++  --color-background: var(--background);
++  --color-foreground: var(--foreground);
++  --font-sans: var(--font-geist-sans);
++  --font-mono: var(--font-geist-mono);
++}
++
++@media (prefers-color-scheme: dark) {
++  :root {
++    --background: #0a0a0a;
++    --foreground: #ededed;
++  }
++}
++
++body {
++  background: var(--background);
++  color: var(--foreground);
++  font-family: Arial, Helvetica, sans-serif;
++}
+diff --git a/app/layout.tsx b/app/layout.tsx
+new file mode 100644
+index 0000000..f7fa87e
+--- /dev/null
++++ b/app/layout.tsx
+@@ -0,0 +1,34 @@
++import type { Metadata } from "next";
++import { Geist, Geist_Mono } from "next/font/google";
++import "./globals.css";
++
++const geistSans = Geist({
++  variable: "--font-geist-sans",
++  subsets: ["latin"],
++});
++
++const geistMono = Geist_Mono({
++  variable: "--font-geist-mono",
++  subsets: ["latin"],
++});
++
++export const metadata: Metadata = {
++  title: "Create Next App",
++  description: "Generated by create next app",
++};
++
++export default function RootLayout({
++  children,
++}: Readonly<{
++  children: React.ReactNode;
++}>) {
++  return (
++    <html lang="en">
++      <body
++        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
++      >
++        {children}
++      </body>
++    </html>
++  );
++}
+diff --git a/app/page.tsx b/app/page.tsx
+new file mode 100644
+index 0000000..691b09e
+--- /dev/null
++++ b/app/page.tsx
+@@ -0,0 +1,185 @@
++"use client";
++
++import { useState } from "react";
++
++type PRSummary = {
++  summary: string;
++  keyChanges: string[];
++  testingSteps: string[];
++  changelog: string;
++};
++
++export default function Home() {
++  const [diffInput, setDiffInput] = useState("");
++  const [generatedOutput, setGeneratedOutput] = useState<PRSummary | null>(null);
++  const [isLoading, setIsLoading] = useState(false);
++  const [error, setError] = useState("");
++
++  const handleGenerate = async () => {
++    if (!diffInput.trim()) {
++      setError("Please paste a git diff before generating.");
++      setGeneratedOutput(null);
++      return;
++    }
++
++    setIsLoading(true);
++    setError("");
++
++    try {
++      const response = await fetch("/api/generate", {
++        method: "POST",
++        headers: {
++          "Content-Type": "application/json",
++        },
++        body: JSON.stringify({ diff: diffInput }),
++      });
++
++      const data = await response.json();
++
++      if (!response.ok) {
++        throw new Error(data.error || "Failed to generate PR summary.");
++      }
++
++      setGeneratedOutput(data);
++    } catch (err) {
++      const message =
++        err instanceof Error
++          ? err.message
++          : "Something went wrong. Please try again.";
++      setError(message);
++      setGeneratedOutput(null);
++    } finally {
++      setIsLoading(false);
++    }
++  };
++
++  const handleCopy = async () => {
++    if (!generatedOutput) return;
++
++    const formatted = `
++Summary
++-------
++${generatedOutput.summary}
++
++Key Changes
++-----------
++${generatedOutput.keyChanges.map((c) => `- ${c}`).join("\n")}
++
++Testing Steps
++-------------
++${generatedOutput.testingSteps.map((t, i) => `${i + 1}. ${t}`).join("\n")}
++
++Changelog
++---------
++${generatedOutput.changelog}
++`;
++
++    await navigator.clipboard.writeText(formatted);
++  };
++
++  return (
++    <div className="min-h-screen bg-gray-100 px-4 py-10 text-gray-900">
++      <main className="mx-auto flex w-full max-w-4xl flex-col gap-8">
++        <header className="space-y-2">
++          <h1 className="text-3xl font-bold tracking-tight">PRPilot AI</h1>
++          <p className="text-gray-600">
++            Generate GitHub PR descriptions instantly from your git diff
++          </p>
++        </header>
++
++        {/* Input Section */}
++
++        <section className="rounded-xl bg-white p-6 shadow-sm">
++          <label htmlFor="git-diff" className="mb-3 block text-sm font-medium">
++            Paste Git Diff
++          </label>
++
++          <textarea
++            id="git-diff"
++            value={diffInput}
++            onChange={(event) => setDiffInput(event.target.value)}
++            placeholder="Paste your git diff here..."
++            className="min-h-64 w-full rounded-lg border border-gray-200 bg-gray-50 p-4 font-mono text-sm text-gray-900 outline-none transition focus:border-gray-400"
++          />
++
++          <button
++            type="button"
++            onClick={handleGenerate}
++            disabled={isLoading}
++            className="mt-4 inline-flex items-center rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
++          >
++            {isLoading ? "Generating..." : "Generate PR Summary"}
++          </button>
++
++          {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
++        </section>
++
++        {/* Output Section */}
++
++        <section className="rounded-xl bg-white p-6 shadow-sm">
++          <div className="mb-4 flex items-center justify-between">
++            <h2 className="text-lg font-semibold">AI Output</h2>
++
++            <button
++              type="button"
++              onClick={handleCopy}
++              disabled={!generatedOutput}
++              className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
++            >
++              Copy
++            </button>
++          </div>
++
++          {!generatedOutput && (
++            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-500">
++              Generated PR summary will appear here...
++            </div>
++          )}
++
++          {generatedOutput && (
++            <div className="space-y-6">
++
++              {/* Summary */}
++
++              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
++                <h3 className="mb-2 font-semibold">Summary</h3>
++                <p>{generatedOutput.summary}</p>
++              </div>
++
++              {/* Key Changes */}
++
++              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
++                <h3 className="mb-2 font-semibold">Key Changes</h3>
++                <ul className="list-disc pl-5">
++                  {generatedOutput.keyChanges.map((item, index) => (
++                    <li key={index}>{item}</li>
++                  ))}
++                </ul>
++              </div>
++
++              {/* Testing Steps */}
++
++              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
++                <h3 className="mb-2 font-semibold">Testing Steps</h3>
++                <ol className="list-decimal pl-5">
++                  {generatedOutput.testingSteps.map((item, index) => (
++                    <li key={index}>{item}</li>
++                  ))}
++                </ol>
++              </div>
++
++              {/* Changelog */}
++
++              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
++                <h3 className="mb-2 font-semibold">Changelog</h3>
++                <pre className="font-mono text-sm whitespace-pre-wrap">
++                  {generatedOutput.changelog}
++                </pre>
++              </div>
++            </div>
++          )}
++        </section>
++      </main>
++    </div>
++  );
++}
+\ No newline at end of file
+diff --git a/eslint.config.mjs b/eslint.config.mjs
+new file mode 100644
+index 0000000..05e726d
+--- /dev/null
++++ b/eslint.config.mjs
+@@ -0,0 +1,18 @@
++import { defineConfig, globalIgnores } from "eslint/config";
++import nextVitals from "eslint-config-next/core-web-vitals";
++import nextTs from "eslint-config-next/typescript";
++
++const eslintConfig = defineConfig([
++  ...nextVitals,
++  ...nextTs,
++  // Override default ignores of eslint-config-next.
++  globalIgnores([
++    // Default ignores of eslint-config-next:
++    ".next/**",
++    "out/**",
++    "build/**",
++    "next-env.d.ts",
++  ]),
++]);
++
++export default eslintConfig;
+diff --git a/next.config.ts b/next.config.ts
+new file mode 100644
+index 0000000..e9ffa30
+--- /dev/null
++++ b/next.config.ts
+@@ -0,0 +1,7 @@
++import type { NextConfig } from "next";
++
++const nextConfig: NextConfig = {
++  /* config options here */
++};
++
++export default nextConfig;
+diff --git a/package-lock.json b/package-lock.json
+new file mode 100644
+index 0000000..b276d23
+--- /dev/null
++++ b/package-lock.json
+@@ -0,0 +1,6614 @@
++{
++  "name": "prpilot-ai",
++  "version": "0.1.0",
++  "lockfileVersion": 3,
++  "requires": true,
++  "packages": {
++    "": {
++      "name": "prpilot-ai",
++      "version": "0.1.0",
++      "dependencies": {
++        "next": "16.1.6",
++        "openai": "^6.27.0",
++        "react": "19.2.3",
++        "react-dom": "19.2.3"
++      },
++      "devDependencies": {
++        "@tailwindcss/postcss": "^4",
++        "@types/node": "^20",
++        "@types/react": "^19",
++        "@types/react-dom": "^19",
++        "eslint": "^9",
++        "eslint-config-next": "16.1.6",
++        "tailwindcss": "^4",
++        "typescript": "^5"
++      }
++    },
++    "node_modules/@alloc/quick-lru": {
++      "version": "5.2.0",
++      "resolved": "https://registry.npmjs.org/@alloc/quick-lru/-/quick-lru-5.2.0.tgz",
++      "integrity": "sha512-UrcABB+4bUrFABwbluTIBErXwvbsU/V7TZWfmbgJfbkwiBuziS9gxdODUyuiecfdGQ85jglMW6juS3+z5TsKLw==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=10"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/sindresorhus"
++      }
++    },
++    "node_modules/@babel/code-frame": {
++      "version": "7.29.0",
++      "resolved": "https://registry.npmjs.org/@babel/code-frame/-/code-frame-7.29.0.tgz",
++      "integrity": "sha512-9NhCeYjq9+3uxgdtp20LSiJXJvN0FeCtNGpJxuMFZ1Kv3cWUNb6DOhJwUvcVCzKGR66cw4njwM6hrJLqgOwbcw==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "@babel/helper-validator-identifier": "^7.28.5",
++        "js-tokens": "^4.0.0",
++        "picocolors": "^1.1.1"
++      },
++      "engines": {
++        "node": ">=6.9.0"
++      }
++    },
++    "node_modules/@babel/compat-data": {
++      "version": "7.29.0",
++      "resolved": "https://registry.npmjs.org/@babel/compat-data/-/compat-data-7.29.0.tgz",
++      "integrity": "sha512-T1NCJqT/j9+cn8fvkt7jtwbLBfLC/1y1c7NtCeXFRgzGTsafi68MRv8yzkYSapBnFA6L3U2VSc02ciDzoAJhJg==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=6.9.0"
++      }
++    },
++    "node_modules/@babel/core": {
++      "version": "7.29.0",
++      "resolved": "https://registry.npmjs.org/@babel/core/-/core-7.29.0.tgz",
++      "integrity": "sha512-CGOfOJqWjg2qW/Mb6zNsDm+u5vFQ8DxXfbM09z69p5Z6+mE1ikP2jUXw+j42Pf1XTYED2Rni5f95npYeuwMDQA==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "@babel/code-frame": "^7.29.0",
++        "@babel/generator": "^7.29.0",
++        "@babel/helper-compilation-targets": "^7.28.6",
++        "@babel/helper-module-transforms": "^7.28.6",
++        "@babel/helpers": "^7.28.6",
++        "@babel/parser": "^7.29.0",
++        "@babel/template": "^7.28.6",
++        "@babel/traverse": "^7.29.0",
++        "@babel/types": "^7.29.0",
++        "@jridgewell/remapping": "^2.3.5",
++        "convert-source-map": "^2.0.0",
++        "debug": "^4.1.0",
++        "gensync": "^1.0.0-beta.2",
++        "json5": "^2.2.3",
++        "semver": "^6.3.1"
++      },
++      "engines": {
++        "node": ">=6.9.0"
++      },
++      "funding": {
++        "type": "opencollective",
++        "url": "https://opencollective.com/babel"
++      }
++    },
++    "node_modules/@babel/generator": {
++      "version": "7.29.1",
++      "resolved": "https://registry.npmjs.org/@babel/generator/-/generator-7.29.1.tgz",
++      "integrity": "sha512-qsaF+9Qcm2Qv8SRIMMscAvG4O3lJ0F1GuMo5HR/Bp02LopNgnZBC/EkbevHFeGs4ls/oPz9v+Bsmzbkbe+0dUw==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "@babel/parser": "^7.29.0",
++        "@babel/types": "^7.29.0",
++        "@jridgewell/gen-mapping": "^0.3.12",
++        "@jridgewell/trace-mapping": "^0.3.28",
++        "jsesc": "^3.0.2"
++      },
++      "engines": {
++        "node": ">=6.9.0"
++      }
++    },
++    "node_modules/@babel/helper-compilation-targets": {
++      "version": "7.28.6",
++      "resolved": "https://registry.npmjs.org/@babel/helper-compilation-targets/-/helper-compilation-targets-7.28.6.tgz",
++      "integrity": "sha512-JYtls3hqi15fcx5GaSNL7SCTJ2MNmjrkHXg4FSpOA/grxK8KwyZ5bubHsCq8FXCkua6xhuaaBit+3b7+VZRfcA==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "@babel/compat-data": "^7.28.6",
++        "@babel/helper-validator-option": "^7.27.1",
++        "browserslist": "^4.24.0",
++        "lru-cache": "^5.1.1",
++        "semver": "^6.3.1"
++      },
++      "engines": {
++        "node": ">=6.9.0"
++      }
++    },
++    "node_modules/@babel/helper-globals": {
++      "version": "7.28.0",
++      "resolved": "https://registry.npmjs.org/@babel/helper-globals/-/helper-globals-7.28.0.tgz",
++      "integrity": "sha512-+W6cISkXFa1jXsDEdYA8HeevQT/FULhxzR99pxphltZcVaugps53THCeiWA8SguxxpSp3gKPiuYfSWopkLQ4hw==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=6.9.0"
++      }
++    },
++    "node_modules/@babel/helper-module-imports": {
++      "version": "7.28.6",
++      "resolved": "https://registry.npmjs.org/@babel/helper-module-imports/-/helper-module-imports-7.28.6.tgz",
++      "integrity": "sha512-l5XkZK7r7wa9LucGw9LwZyyCUscb4x37JWTPz7swwFE/0FMQAGpiWUZn8u9DzkSBWEcK25jmvubfpw2dnAMdbw==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "@babel/traverse": "^7.28.6",
++        "@babel/types": "^7.28.6"
++      },
++      "engines": {
++        "node": ">=6.9.0"
++      }
++    },
++    "node_modules/@babel/helper-module-transforms": {
++      "version": "7.28.6",
++      "resolved": "https://registry.npmjs.org/@babel/helper-module-transforms/-/helper-module-transforms-7.28.6.tgz",
++      "integrity": "sha512-67oXFAYr2cDLDVGLXTEABjdBJZ6drElUSI7WKp70NrpyISso3plG9SAGEF6y7zbha/wOzUByWWTJvEDVNIUGcA==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "@babel/helper-module-imports": "^7.28.6",
++        "@babel/helper-validator-identifier": "^7.28.5",
++        "@babel/traverse": "^7.28.6"
++      },
++      "engines": {
++        "node": ">=6.9.0"
++      },
++      "peerDependencies": {
++        "@babel/core": "^7.0.0"
++      }
++    },
++    "node_modules/@babel/helper-string-parser": {
++      "version": "7.27.1",
++      "resolved": "https://registry.npmjs.org/@babel/helper-string-parser/-/helper-string-parser-7.27.1.tgz",
++      "integrity": "sha512-qMlSxKbpRlAridDExk92nSobyDdpPijUq2DW6oDnUqd0iOGxmQjyqhMIihI9+zv4LPyZdRje2cavWPbCbWm3eA==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=6.9.0"
++      }
++    },
++    "node_modules/@babel/helper-validator-identifier": {
++      "version": "7.28.5",
++      "resolved": "https://registry.npmjs.org/@babel/helper-validator-identifier/-/helper-validator-identifier-7.28.5.tgz",
++      "integrity": "sha512-qSs4ifwzKJSV39ucNjsvc6WVHs6b7S03sOh2OcHF9UHfVPqWWALUsNUVzhSBiItjRZoLHx7nIarVjqKVusUZ1Q==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=6.9.0"
++      }
++    },
++    "node_modules/@babel/helper-validator-option": {
++      "version": "7.27.1",
++      "resolved": "https://registry.npmjs.org/@babel/helper-validator-option/-/helper-validator-option-7.27.1.tgz",
++      "integrity": "sha512-YvjJow9FxbhFFKDSuFnVCe2WxXk1zWc22fFePVNEaWJEu8IrZVlda6N0uHwzZrUM1il7NC9Mlp4MaJYbYd9JSg==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=6.9.0"
++      }
++    },
++    "node_modules/@babel/helpers": {
++      "version": "7.28.6",
++      "resolved": "https://registry.npmjs.org/@babel/helpers/-/helpers-7.28.6.tgz",
++      "integrity": "sha512-xOBvwq86HHdB7WUDTfKfT/Vuxh7gElQ+Sfti2Cy6yIWNW05P8iUslOVcZ4/sKbE+/jQaukQAdz/gf3724kYdqw==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "@babel/template": "^7.28.6",
++        "@babel/types": "^7.28.6"
++      },
++      "engines": {
++        "node": ">=6.9.0"
++      }
++    },
++    "node_modules/@babel/parser": {
++      "version": "7.29.0",
++      "resolved": "https://registry.npmjs.org/@babel/parser/-/parser-7.29.0.tgz",
++      "integrity": "sha512-IyDgFV5GeDUVX4YdF/3CPULtVGSXXMLh1xVIgdCgxApktqnQV0r7/8Nqthg+8YLGaAtdyIlo2qIdZrbCv4+7ww==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "@babel/types": "^7.29.0"
++      },
++      "bin": {
++        "parser": "bin/babel-parser.js"
++      },
++      "engines": {
++        "node": ">=6.0.0"
++      }
++    },
++    "node_modules/@babel/template": {
++      "version": "7.28.6",
++      "resolved": "https://registry.npmjs.org/@babel/template/-/template-7.28.6.tgz",
++      "integrity": "sha512-YA6Ma2KsCdGb+WC6UpBVFJGXL58MDA6oyONbjyF/+5sBgxY/dwkhLogbMT2GXXyU84/IhRw/2D1Os1B/giz+BQ==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "@babel/code-frame": "^7.28.6",
++        "@babel/parser": "^7.28.6",
++        "@babel/types": "^7.28.6"
++      },
++      "engines": {
++        "node": ">=6.9.0"
++      }
++    },
++    "node_modules/@babel/traverse": {
++      "version": "7.29.0",
++      "resolved": "https://registry.npmjs.org/@babel/traverse/-/traverse-7.29.0.tgz",
++      "integrity": "sha512-4HPiQr0X7+waHfyXPZpWPfWL/J7dcN1mx9gL6WdQVMbPnF3+ZhSMs8tCxN7oHddJE9fhNE7+lxdnlyemKfJRuA==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "@babel/code-frame": "^7.29.0",
++        "@babel/generator": "^7.29.0",
++        "@babel/helper-globals": "^7.28.0",
++        "@babel/parser": "^7.29.0",
++        "@babel/template": "^7.28.6",
++        "@babel/types": "^7.29.0",
++        "debug": "^4.3.1"
++      },
++      "engines": {
++        "node": ">=6.9.0"
++      }
++    },
++    "node_modules/@babel/types": {
++      "version": "7.29.0",
++      "resolved": "https://registry.npmjs.org/@babel/types/-/types-7.29.0.tgz",
++      "integrity": "sha512-LwdZHpScM4Qz8Xw2iKSzS+cfglZzJGvofQICy7W7v4caru4EaAmyUuO6BGrbyQ2mYV11W0U8j5mBhd14dd3B0A==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "@babel/helper-string-parser": "^7.27.1",
++        "@babel/helper-validator-identifier": "^7.28.5"
++      },
++      "engines": {
++        "node": ">=6.9.0"
++      }
++    },
++    "node_modules/@emnapi/core": {
++      "version": "1.8.1",
++      "resolved": "https://registry.npmjs.org/@emnapi/core/-/core-1.8.1.tgz",
++      "integrity": "sha512-AvT9QFpxK0Zd8J0jopedNm+w/2fIzvtPKPjqyw9jwvBaReTTqPBk9Hixaz7KbjimP+QNz605/XnjFcDAL2pqBg==",
