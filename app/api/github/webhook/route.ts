@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
           blastRadius: data.blastRadius,
           compliance: data.compliance,
           repository: data.repository,
-          appUrl: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+          appUrl: process.env.APP_URL
         });
 
         // STEP 4 — Post comment
