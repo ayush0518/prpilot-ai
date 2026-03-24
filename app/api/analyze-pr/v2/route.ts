@@ -1,6 +1,18 @@
 import { analyzePullRequest } from "@/app/services/prAnalyzer";
 import { PRAnalysisWithRiskScore, BlastRadius, ComplianceResult, MergeReadiness } from "@/app/types/prAnalysis";
 
+/**
+ * ⚡ CRITICAL: Force dynamic evaluation for this route
+ * Required because this API route:
+ * - Accesses environment variables (GITHUB_TOKEN, OPENAI_API_KEY)
+ * - Makes external API calls to GitHub and OpenAI
+ * - Processes user-provided PR identifiers at request time
+ * 
+ * Without this, Next.js tries static optimization → fails at build time
+ * because env vars don't exist during build
+ */
+export const dynamic = "force-dynamic";
+
 interface AnalyzePRRequest {
   prNumber?: number;
   owner?: string;
