@@ -1,3 +1,4 @@
+import "@/app/lib/debugFetch";
 import { NextRequest, NextResponse } from "next/server";
 import { Octokit } from "@octokit/rest";
 import { createAppAuth } from "@octokit/auth-app";
