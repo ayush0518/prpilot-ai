@@ -151,30 +151,30 @@ export async function POST(req: NextRequest) {
       throw new Error("Analysis result was incomplete; required fields are missing");
     }
 
-    const octokit = new Octokit({
-      authStrategy: createAppAuth,
-      auth: {
-        appId,
-        privateKey,
-        installationId,
-      },
-    });
+    // const octokit = new Octokit({
+    //   authStrategy: createAppAuth,
+    //   auth: {
+    //     appId,
+    //     privateKey,
+    //     installationId,
+    //   },
+    // });
 
-    const commentBody = generatePRComment({
-      analysis: result.analysis,
-      mergeReadiness,
-      blastRadius,
-      compliance,
-      repository: result.repository,
-      appUrl,
-    });
+    // const commentBody = generatePRComment({
+    //   analysis: result.analysis,
+    //   mergeReadiness,
+    //   blastRadius,
+    //   compliance,
+    //   repository: result.repository,
+    //   appUrl,
+    // });
 
-    await octokit.issues.createComment({
-      owner,
-      repo,
-      issue_number: prNumber,
-      body: commentBody,
-    });
+    // await octokit.issues.createComment({
+    //   owner,
+    //   repo,
+    //   issue_number: prNumber,
+    //   body: commentBody,
+    // });
 
     console.log(`[webhook:${deliveryId}] Comment posted successfully`);
     return NextResponse.json({ success: true });
