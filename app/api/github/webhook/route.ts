@@ -141,15 +141,33 @@ export async function POST(req: NextRequest) {
   });
 
   try {
-    const result = await analyzePR(prUrl);
-    const { appId, privateKey } = getGitHubAppCredentials();
-    const mergeReadiness = result.mergeReadiness;
-    const blastRadius = result.blastRadius;
-    const compliance = result.compliance;
+    console.log("👉 Starting analyzePR", { prUrl });
 
-    if (!mergeReadiness || !blastRadius || !compliance) {
-      throw new Error("Analysis result was incomplete; required fields are missing");
+    let result;
+    try {
+      result = await analyzePR(prUrl);
+      console.log("✅ analyzePR completed");
+    } catch (err) {
+      console.error("❌ analyzePR failed", {
+        message: err instanceof Error ? err.message : err,
+        stack: err instanceof Error ? err.stack : null,
+      });
+      throw err;
     }
+
+    return NextResponse.json({
+      success: true,
+      debug: "analyzePR_success",
+    });
+
+    // const { appId, privateKey } = getGitHubAppCredentials();
+    // const mergeReadiness = result.mergeReadiness;
+    // const blastRadius = result.blastRadius;
+    // const compliance = result.compliance;
+
+    // if (!mergeReadiness || !blastRadius || !compliance) {
+    //   throw new Error("Analysis result was incomplete; required fields are missing");
+    // }
 
     // const octokit = new Octokit({
     //   authStrategy: createAppAuth,
@@ -176,8 +194,8 @@ export async function POST(req: NextRequest) {
     //   body: commentBody,
     // });
 
-    console.log(`[webhook:${deliveryId}] Comment posted successfully`);
-    return NextResponse.json({ success: true });
+    // console.log(`[webhook:${deliveryId}] Comment posted successfully`);
+    // return NextResponse.json({ success: true });
   } catch (error) {
     console.error(`[webhook:${deliveryId}] Webhook processing failed`, asErrorDetails(error));
     return NextResponse.json(
