@@ -1,222 +1,100 @@
 import { NextRequest, NextResponse } from "next/server";
-
-// Disabled for isolation debugging (keep for quick restore):
-// import "@/app/lib/debugFetch";
-// import { Octokit } from "@octokit/rest";
-// import { createAppAuth } from "@octokit/auth-app";
-// import { analyzePR } from "@/app/services/analyzePR";
-// import { generatePRComment } from "@/app/utils/prCommentFormatter";
+import { App } from "octokit";
+import { analyzePR } from "@/app/services/analyzePR";
+import { generatePRComment } from "@/app/utils/prCommentFormatter";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Original webhook types/helpers preserved for quick restore:
-// type PullRequestAction = "opened" | "synchronize";
-//
-// interface PullRequestWebhookPayload {
-//   action?: string;
-//   pull_request?: {
-//     html_url?: string;
-//     number?: number;
-//   };
-//   repository?: {
-//     name?: string;
-//     owner?: {
-//       login?: string;
-//     };
-//   };
-//   installation?: {
-//     id?: number;
-//   };
-// }
-//
-// function asErrorDetails(error: unknown): Record<string, unknown> {
-//   if (error instanceof Error) {
-//     const octokitError = error as Error & {
-//       status?: number;
-//       response?: { data?: unknown };
-//     };
-//
-//     return {
-//       name: error.name,
-//       message: error.message,
-//       stack: error.stack,
-//       status: octokitError.status,
-//       response: octokitError.response?.data,
-//     };
-//   }
-//
-//   return { message: String(error) };
-// }
-//
-// function getAppUrl(req: NextRequest): string | undefined {
-//   const configuredUrl = process.env.APP_URL?.trim();
-//   if (configuredUrl) {
-//     return configuredUrl.replace(/\/$/, "");
-//   }
-//
-//   try {
-//     return new URL(req.url).origin;
-//   } catch {
-//     return undefined;
-//   }
-// }
-//
-// function getGitHubAppCredentials(): { appId: string; privateKey: string } {
-//   const appId = process.env.GITHUB_APP_ID?.trim();
-//   const rawPrivateKey = process.env.GITHUB_PRIVATE_KEY;
-//
-//   if (!appId) {
-//     throw new Error("Missing required environment variable: GITHUB_APP_ID");
-//   }
-//
-//   if (!rawPrivateKey) {
-//     throw new Error("Missing required environment variable: GITHUB_PRIVATE_KEY");
-//   }
-//
-//   return {
-//     appId,
-//     privateKey: rawPrivateKey.replace(/\\n/g, "\n"),
-//   };
-// }
-//
-// function isSupportedAction(action: string | undefined): action is PullRequestAction {
-//   return action === "opened" || action === "synchronize";
-// }
-
 export async function POST(req: NextRequest) {
-  console.log("\uD83D\uDD25 Webhook handler invoked");
-
-  console.log("\uD83D\uDCE8 Headers:", {
-    event: req.headers.get("x-github-event"),
-    delivery: req.headers.get("x-github-delivery"),
-    contentType: req.headers.get("content-type"),
-  });
-
-  let payload: unknown;
-
   try {
     const rawBody = await req.text();
-    console.log("\uD83D\uDCE6 RAW BODY:", rawBody.slice(0, 500));
+    const payload = JSON.parse(rawBody);
 
-    payload = JSON.parse(rawBody);
-    void payload;
-  } catch (err) {
-    console.error("\u274C Failed to parse request body:", err);
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    const event = req.headers.get("x-github-event");
+
+    if (event !== "pull_request") {
+      return NextResponse.json({ ignored: true });
+    }
+
+    const action = payload.action;
+
+    // Only handle PR opened or updated
+    if (!["opened", "synchronize"].includes(action)) {
+      return NextResponse.json({ ignored: true });
+    }
+
+    const pr = payload.pull_request;
+
+    const prUrl = pr?.html_url;
+    const prNumber = pr?.number;
+    const repo = payload.repository?.name;
+    const owner = payload.repository?.owner?.login;
+    const installationId = payload.installation?.id;
+
+    if (!prUrl || !prNumber || !repo || !owner || !installationId) {
+      console.error("Missing required fields", {
+        prUrl,
+        prNumber,
+        repo,
+        owner,
+        installationId,
+      });
+      return NextResponse.json(
+        { error: "Invalid payload" },
+        { status: 400 }
+      );
+    }
+
+    console.log("Processing PR:", prUrl);
+    console.log("Action:", action);
+
+    // ✅ STEP 1 — Run analysis directly (NO fetch)
+    const result = await analyzePR(prUrl);
+
+    if (
+      !result?.analysis ||
+      !result?.mergeReadiness ||
+      !result?.blastRadius ||
+      !result?.compliance
+    ) {
+      throw new Error("Invalid analysis result");
+    }
+
+    // ✅ STEP 2 — GitHub App authentication (CORRECT WAY)
+    const app = new App({
+      appId: process.env.GITHUB_APP_ID!,
+      privateKey: process.env.GITHUB_PRIVATE_KEY!.replace(/\\n/g, "\n"),
+    });
+
+    const octokit = await app.getInstallationOctokit(installationId);
+
+    // ✅ STEP 3 — Generate comment
+    const commentBody = generatePRComment({
+      analysis: result.analysis,
+      mergeReadiness: result.mergeReadiness,
+      blastRadius: result.blastRadius,
+      compliance: result.compliance,
+      repository: result.repository,
+      appUrl: process.env.APP_URL,
+    });
+
+    // ✅ STEP 4 — Post comment
+    await octokit.rest.issues.createComment({
+      owner,
+      repo,
+      issue_number: prNumber,
+      body: commentBody,
+    });
+
+    console.log("✅ Comment posted successfully");
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("❌ Webhook error:", error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Webhook failed" },
+      { status: 500 }
+    );
   }
-
-  // Original logic intentionally disabled during debugging:
-  //
-  // const event = req.headers.get("x-github-event");
-  // const deliveryId = req.headers.get("x-github-delivery") ?? "unknown-delivery";
-  //
-  // if (event !== "pull_request") {
-  //   return NextResponse.json({ success: true, ignored: true, reason: "event_not_supported" });
-  // }
-  //
-  // const parsedPayload = payload as PullRequestWebhookPayload;
-  //
-  // if (!isSupportedAction(parsedPayload.action)) {
-  //   return NextResponse.json({ success: true, ignored: true, reason: "action_not_supported" });
-  // }
-  //
-  // const prUrl = parsedPayload.pull_request?.html_url;
-  // const prNumber = parsedPayload.pull_request?.number;
-  // const repo = parsedPayload.repository?.name;
-  // const owner = parsedPayload.repository?.owner?.login;
-  // const installationId = parsedPayload.installation?.id;
-  //
-  // if (!prUrl || !prNumber || !repo || !owner || !installationId) {
-  //   console.error(`[webhook:${deliveryId}] Missing required webhook fields`, {
-  //     hasPrUrl: Boolean(prUrl),
-  //     hasPrNumber: Boolean(prNumber),
-  //     hasRepo: Boolean(repo),
-  //     hasOwner: Boolean(owner),
-  //     hasInstallationId: Boolean(installationId),
-  //   });
-  //   return NextResponse.json(
-  //     { success: false, error: "Missing required webhook payload fields" },
-  //     { status: 400 }
-  //   );
-  // }
-  //
-  // const appUrl = getAppUrl(req);
-  // console.log("Using APP_URL:", appUrl);
-  // console.log(`[webhook:${deliveryId}] Processing PR`, {
-  //   action: parsedPayload.action,
-  //   prUrl,
-  //   repo: `${owner}/${repo}`,
-  //   hasAppUrl: Boolean(appUrl),
-  //   appUrl: appUrl ?? null,
-  //   hasGithubAppId: Boolean(process.env.GITHUB_APP_ID),
-  //   hasGithubPrivateKey: Boolean(process.env.GITHUB_PRIVATE_KEY),
-  // });
-  //
-  // try {
-  //   console.log("👉 Starting analyzePR", { prUrl });
-  //
-  //   let result;
-  //   try {
-  //     result = await analyzePR(prUrl);
-  //     console.log("✅ analyzePR completed");
-  //   } catch (err) {
-  //     console.error("❌ analyzePR failed", {
-  //       message: err instanceof Error ? err.message : err,
-  //       stack: err instanceof Error ? err.stack : null,
-  //     });
-  //     throw err;
-  //   }
-  //
-  //   const { appId, privateKey } = getGitHubAppCredentials();
-  //   const mergeReadiness = result.mergeReadiness;
-  //   const blastRadius = result.blastRadius;
-  //   const compliance = result.compliance;
-  //
-  //   if (!mergeReadiness || !blastRadius || !compliance) {
-  //     throw new Error("Analysis result was incomplete; required fields are missing");
-  //   }
-  //
-  //   const octokit = new Octokit({
-  //     authStrategy: createAppAuth,
-  //     auth: {
-  //       appId,
-  //       privateKey,
-  //       installationId,
-  //     },
-  //   });
-  //
-  //   const commentBody = generatePRComment({
-  //     analysis: result.analysis,
-  //     mergeReadiness,
-  //     blastRadius,
-  //     compliance,
-  //     repository: result.repository,
-  //     appUrl,
-  //   });
-  //
-  //   await octokit.issues.createComment({
-  //     owner,
-  //     repo,
-  //     issue_number: prNumber,
-  //     body: commentBody,
-  //   });
-  //
-  //   console.log(`[webhook:${deliveryId}] Comment posted successfully`);
-  //   return NextResponse.json({ success: true });
-  // } catch (error) {
-  //   console.error(`[webhook:${deliveryId}] Webhook processing failed`, asErrorDetails(error));
-  //   return NextResponse.json(
-  //     {
-  //       success: false,
-  //       error: error instanceof Error ? error.message : "Webhook processing failed",
-  //     },
-  //     { status: 500 }
-  //   );
-  // }
-
-  return NextResponse.json({
-    success: true,
-    debug: "handler_reached",
-  });
 }
