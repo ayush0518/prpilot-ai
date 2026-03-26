@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
 
         // STEP 1 — Call MergeMind analyzer
         const analysisResponse = await fetch(
-          "http://localhost:3000/api/analyze-pr/v2",
+          `${process.env.APP_URL}/api/analyze-pr/v2`,
           {
             method: "POST",
             headers: {
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
           blastRadius: data.blastRadius,
           compliance: data.compliance,
           repository: data.repository,
-          appUrl: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+          appUrl: process.env.APP_URL
         });
 
         // STEP 4 — Post comment
@@ -74,5 +74,3 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Webhook failed" }, { status: 500 });
   }
 }
-
-
