@@ -21,14 +21,15 @@ interface GitHubPRData {
 
 interface AnalysisOutput {
   analysis: PRAnalysisWithRiskScore;
-  finalRiskLevel: "LOW" | "MEDIUM" | "HIGH"; // 🔥 SINGLE SOURCE OF TRUTH - UI must use only this value, not analysis.riskLevel or analysis.computedRiskLevel
+  finalRiskLevel: "LOW" | "MEDIUM" | "HIGH"; // SINGLE SOURCE OF TRUTH - UI must use only this value, not analysis.riskLevel or analysis.computedRiskLevel
   repository?: {
     changedFiles: string[];
     totalFiles: number;
+    prUrl?: string;
   };
   blastRadius?: BlastRadius;
   compliance?: ComplianceResult;
-  mergeReadiness?: MergeReadiness; // 🔥 Single merge decision for the PR
+  mergeReadiness?: MergeReadiness; // Single merge decision for the PR
 }
 
 /**
@@ -234,7 +235,8 @@ export async function analyzePullRequest(
       finalRiskLevel,
       repository: {
         changedFiles: context.files.map(file => file.filename),
-        totalFiles: context.files.length
+        totalFiles: context.files.length,
+        prUrl: `https://github.com/${owner}/${repo}/pull/${prNumber}`
       },
       blastRadius,
       compliance,
@@ -291,3 +293,4 @@ export async function analyzePRFromData(prData: GitHubPRData): Promise<AnalysisO
     throw new Error(`Failed to analyze PR: ${errorMessage}`);
   }
 }
+
