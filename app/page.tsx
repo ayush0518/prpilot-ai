@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import PRAnalysisCard from "./components/PRAnalysisCard";
 import { PRAnalysisWithRiskScore, BlastRadius, ComplianceResult, MergeReadiness } from "@/app/types/prAnalysis";
 
@@ -32,9 +32,10 @@ export default function Home() {
   const [compliance, setCompliance] = useState<ComplianceResult | null>(null)
   const [mergeReadiness, setMergeReadiness] = useState<MergeReadiness | null>(null)
   const [expandedLayer, setExpandedLayer] = useState<string | null>(null)
+  const hasAutoAnalyzed = useRef(false);
 
-  const handleAnalyze = async () => {
-    const trimmedPrUrl = prUrl.trim();
+  const handleAnalyze = useCallback(async (overridePrUrl?: string) => {
+    const trimmedPrUrl = (overridePrUrl ?? prUrl).trim();
     const trimmedDiff = diffInput.trim();
 
     // Validate that at least one input is provided
@@ -94,7 +95,25 @@ export default function Home() {
     } finally {
       setIsAnalyzing(false);
     }
-  };
+  }, [diffInput, prUrl]);
+
+  useEffect(() => {
+    if (hasAutoAnalyzed.current) return;
+
+    const urlParam = new URLSearchParams(window.location.search).get("url");
+    if (!urlParam) return;
+
+    const incomingPrUrl = urlParam.trim();
+    setPrUrl(incomingPrUrl);
+
+    if (!isValidGitHubPRUrl(incomingPrUrl)) {
+      setError("Invalid GitHub PR URL in query parameter.");
+      return;
+    }
+
+    hasAutoAnalyzed.current = true;
+    void handleAnalyze(incomingPrUrl);
+  }, [handleAnalyze]);
 
   return (
     <div className="min-h-screen bg-gray-950 px-4 py-10 text-gray-100">
@@ -141,7 +160,9 @@ export default function Home() {
 
           <button
             type="button"
-            onClick={handleAnalyze}
+            onClick={() => {
+              void handleAnalyze();
+            }}
             disabled={isAnalyzing}
             className="mt-4 inline-flex items-center rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 px-6 py-2 text-sm font-medium text-white transition hover:from-cyan-700 hover:to-blue-700 disabled:cursor-not-allowed disabled:opacity-60 shadow-lg"
           >

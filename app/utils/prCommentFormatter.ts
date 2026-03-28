@@ -40,11 +40,12 @@ export function generatePRComment(data: PRCommentData): string {
   const statusColor = getStatusColor(mergeReadiness.status);
   const complianceLevel = getComplianceLevel(compliance.riskLevel);
   const confidencePercent = Math.round(analysis.confidenceScore * 100);
+  const baseAppUrl = appUrl ? appUrl.replace(/\/+$/, "") : "";
   const encodedPrUrl = repository?.prUrl
     ? encodeURIComponent(repository.prUrl)
     : "";
-  const fullAnalysisUrl = appUrl
-    ? `${appUrl}/pr${encodedPrUrl ? `?url=${encodedPrUrl}` : ""}`
+  const fullAnalysisUrl = baseAppUrl
+    ? `${baseAppUrl}${encodedPrUrl ? `/?url=${encodedPrUrl}` : ""}`
     : "";
   const EMOJI = {
     brain: "\u{1F9E0}",
@@ -93,6 +94,7 @@ ${formatWhatChanged(blastRadius, repository)}
 
 ${criticalFiles.length > 0 ? formatCriticalFilesSection(criticalFiles) + "\n" : ""}
 ### ${EMOJI.risk} Key Risks
+${formatKeyRisks(analysis.issues)}
 
 ---
 
@@ -108,9 +110,7 @@ ${formatSuggestions(analysis.improvements)}
 
 ---
 
-${
-  fullAnalysisUrl ? `\n${EMOJI.link} **View Full Analysis:** ${fullAnalysisUrl}` : ""
-}
+${fullAnalysisUrl ? `<a href="${fullAnalysisUrl}" target="_blank" rel="noopener noreferrer">${EMOJI.link} <strong>View Full Analysis</strong></a>` : ""}
 
 ---
 
@@ -262,4 +262,3 @@ function getFinalVerdictText(status: string): string {
       return "Review required";
   }
 }
-
