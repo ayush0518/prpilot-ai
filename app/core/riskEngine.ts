@@ -6,7 +6,12 @@
  * - Severity of issues
  */
 
-import { PRAnalysis, RiskLevel, RiskScoreBreakdown, PRAnalysisWithRiskScore } from "@/app/types/prAnalysis";
+import {
+  PRAnalysis,
+  PRAnalysisWithRiskScore,
+  RiskLevel,
+  RiskScoreBreakdown,
+} from "@/app/types/prAnalysis";
 import { PRContext } from "@/app/services/contextBuilder";
 
 /**
@@ -14,10 +19,9 @@ import { PRContext } from "@/app/services/contextBuilder";
  */
 const RISK_CONFIG = {
   diffSize: {
-    SMALL_THRESHOLD: 100, // Lines
-    MEDIUM_THRESHOLD: 500, // Lines
-    LARGE_THRESHOLD: 1000, // Lines
-    // Risk multipliers
+    SMALL_THRESHOLD: 100,
+    MEDIUM_THRESHOLD: 500,
+    LARGE_THRESHOLD: 1000,
     SMALL_MULTIPLIER: 0.1,
     MEDIUM_MULTIPLIER: 0.3,
     LARGE_MULTIPLIER: 0.6,
@@ -27,7 +31,6 @@ const RISK_CONFIG = {
     LOW_THRESHOLD: 2,
     MEDIUM_THRESHOLD: 5,
     HIGH_THRESHOLD: 10,
-    // Risk multipliers
     LOW_RISK: 0.1,
     MEDIUM_RISK: 0.4,
     HIGH_RISK: 0.8,
@@ -40,48 +43,39 @@ const RISK_CONFIG = {
   },
 };
 
-/**
- * Calculates risk from diff size
- * Larger diffs = higher risk
- */
 function calculateDiffSizeRisk(prContext: PRContext): number {
   const totalChanges = prContext.files.reduce(
     (sum, file) => sum + file.additions + file.deletions,
-    0
+    0,
   );
 
   if (totalChanges <= RISK_CONFIG.diffSize.SMALL_THRESHOLD) {
     return RISK_CONFIG.diffSize.SMALL_MULTIPLIER;
-  } else if (totalChanges <= RISK_CONFIG.diffSize.MEDIUM_THRESHOLD) {
-    return RISK_CONFIG.diffSize.MEDIUM_MULTIPLIER;
-  } else if (totalChanges <= RISK_CONFIG.diffSize.LARGE_THRESHOLD) {
-    return RISK_CONFIG.diffSize.LARGE_MULTIPLIER;
-  } else {
-    return RISK_CONFIG.diffSize.HUGE_MULTIPLIER;
   }
+  if (totalChanges <= RISK_CONFIG.diffSize.MEDIUM_THRESHOLD) {
+    return RISK_CONFIG.diffSize.MEDIUM_MULTIPLIER;
+  }
+  if (totalChanges <= RISK_CONFIG.diffSize.LARGE_THRESHOLD) {
+    return RISK_CONFIG.diffSize.LARGE_MULTIPLIER;
+  }
+  return RISK_CONFIG.diffSize.HUGE_MULTIPLIER;
 }
 
-/**
- * Calculates risk from number of issues
- */
 function calculateIssueCountRisk(analysis: PRAnalysis): number {
   const issueCount = analysis.issues.length;
 
   if (issueCount <= RISK_CONFIG.issueCount.LOW_THRESHOLD) {
     return RISK_CONFIG.issueCount.LOW_RISK;
-  } else if (issueCount <= RISK_CONFIG.issueCount.MEDIUM_THRESHOLD) {
-    return RISK_CONFIG.issueCount.MEDIUM_RISK;
-  } else if (issueCount <= RISK_CONFIG.issueCount.HIGH_THRESHOLD) {
-    return RISK_CONFIG.issueCount.HIGH_RISK;
-  } else {
-    return RISK_CONFIG.issueCount.CRITICAL_RISK;
   }
+  if (issueCount <= RISK_CONFIG.issueCount.MEDIUM_THRESHOLD) {
+    return RISK_CONFIG.issueCount.MEDIUM_RISK;
+  }
+  if (issueCount <= RISK_CONFIG.issueCount.HIGH_THRESHOLD) {
+    return RISK_CONFIG.issueCount.HIGH_RISK;
+  }
+  return RISK_CONFIG.issueCount.CRITICAL_RISK;
 }
 
-/**
- * Calculates risk from severity of issues
- * Weight = (count_high * 1.0 + count_medium * 0.4 + count_low * 0.1) / total_issues
- */
 function calculateIssueSeverityRisk(analysis: PRAnalysis): number {
   if (analysis.issues.length === 0) {
     return 0;
@@ -92,36 +86,26 @@ function calculateIssueSeverityRisk(analysis: PRAnalysis): number {
     severityScore += RISK_CONFIG.severity[issue.severity];
   }
 
-  // Average the risk score
   return Math.min(1, severityScore / analysis.issues.length);
 }
 
 /**
- * Computes dynamic confidence score based on PR characteristics
- * More data and signals → higher confidence
- * 
- * Base: 0.5
- * +0.15 if >5 files
- * +0.10 if >15 files
- * +0.10 if >200 total changes
- * +0.05 if >1000 total changes
- * +0.10 if issues found
- * Cap: 0.95
+ * Computes dynamic signal strength based on PR characteristics.
+ * More data and more reviewable context produce a stronger signal.
  */
-function computeConfidenceScore(
+function computeSignalStrength(
   prContext: PRContext,
-  analysis: PRAnalysis
+  analysis: PRAnalysis,
 ): number {
   let score = 0.5;
 
   const totalFiles = prContext.files.length;
   const totalChanges = prContext.files.reduce(
     (sum, file) => sum + file.additions + file.deletions,
-    0
+    0,
   );
   const issuesCount = analysis.issues.length;
 
-  // More files = more to analyze = higher confidence
   if (totalFiles > 5) {
     score += 0.15;
   }
@@ -129,7 +113,6 @@ function computeConfidenceScore(
     score += 0.1;
   }
 
-  // Larger changes = more signal for analysis
   if (totalChanges > 200) {
     score += 0.1;
   }
@@ -137,36 +120,27 @@ function computeConfidenceScore(
     score += 0.05;
   }
 
-  // Issues found = clearer analysis signal
   if (issuesCount > 0) {
     score += 0.1;
   }
 
-  // Cap at 0.95 max (always leave room for uncertainty)
   return Math.min(score, 0.95);
 }
 
-/**
- * Converts numeric score (0-1) to risk level
- */
 function scoreToRiskLevel(score: number): RiskLevel {
   if (score < 0.33) {
     return "LOW";
-  } else if (score < 0.67) {
-    return "MEDIUM";
-  } else {
-    return "HIGH";
   }
+  if (score < 0.67) {
+    return "MEDIUM";
+  }
+  return "HIGH";
 }
 
-/**
- * Calculates overall risk score using weighted average
- * Weights: diff size (40%), issue count (35%), severity (25%)
- */
 function calculateOverallRiskScore(
   diffSizeRisk: number,
   issueCountRisk: number,
-  issueSeverityRisk: number
+  issueSeverityRisk: number,
 ): number {
   const weights = {
     diffSize: 0.4,
@@ -181,21 +155,18 @@ function calculateOverallRiskScore(
   );
 }
 
-/**
- * Generates a human-readable rationale for the risk score
- */
 function generateRiskRationale(
   diffSizeRisk: number,
-  issueCountRisk: number,
-  issueSeverityRisk: number,
+  _issueCountRisk: number,
+  _issueSeverityRisk: number,
   analysis: PRAnalysis,
-  prContext: PRContext
+  prContext: PRContext,
 ): string {
   const factors: string[] = [];
 
   const totalChanges = prContext.files.reduce(
     (sum, file) => sum + file.additions + file.deletions,
-    0
+    0,
   );
 
   if (diffSizeRisk > 0.6) {
@@ -207,13 +178,9 @@ function generateRiskRationale(
   if (analysis.issues.length > 0) {
     factors.push(
       `${analysis.issues.length} issue(s) found: ${analysis.issues
-        .map((i) => `${i.severity} ${i.type}`)
-        .join(", ")}`
+        .map((issue) => `${issue.severity} ${issue.type}`)
+        .join(", ")}`,
     );
-  }
-
-  if (analysis.confidenceScore < 0.5) {
-    factors.push("low confidence in analysis");
   }
 
   if (factors.length === 0) {
@@ -223,13 +190,9 @@ function generateRiskRationale(
   return `Risk factors: ${factors.join("; ")}`;
 }
 
-/**
- * Main risk scoring function
- * Takes LLM analysis and PR context and computes risk breakdown
- */
 export function calculateRiskScore(
   analysis: PRAnalysis,
-  prContext: PRContext
+  prContext: PRContext,
 ): RiskScoreBreakdown {
   const diffSizeRisk = calculateDiffSizeRisk(prContext);
   const issueCountRisk = calculateIssueCountRisk(analysis);
@@ -238,7 +201,7 @@ export function calculateRiskScore(
   const finalRiskScore = calculateOverallRiskScore(
     diffSizeRisk,
     issueCountRisk,
-    issueSeverityRisk
+    issueSeverityRisk,
   );
 
   const rationale = generateRiskRationale(
@@ -246,7 +209,7 @@ export function calculateRiskScore(
     issueCountRisk,
     issueSeverityRisk,
     analysis,
-    prContext
+    prContext,
   );
 
   return {
@@ -258,35 +221,27 @@ export function calculateRiskScore(
   };
 }
 
-/**
- * Extends analysis with computed risk level and dynamic confidence score
- */
 export function enhanceAnalysisWithRiskScore(
   analysis: PRAnalysis,
-  prContext: PRContext
+  prContext: PRContext,
 ): PRAnalysisWithRiskScore {
   const riskScoreBreakdown = calculateRiskScore(analysis, prContext);
-  const computedRiskLevel = scoreToRiskLevel(riskScoreBreakdown.finalRiskScore / 100);
-  
-  // Compute dynamic confidence score based on PR characteristics
-  const dynamicConfidenceScore = computeConfidenceScore(prContext, analysis);
+  const computedRiskLevel = scoreToRiskLevel(
+    riskScoreBreakdown.finalRiskScore / 100,
+  );
+  const signalStrength = computeSignalStrength(prContext, analysis);
 
   return {
     ...analysis,
-    confidenceScore: dynamicConfidenceScore,
+    signalStrength,
     computedRiskLevel,
     riskScoreBreakdown,
   };
 }
 
-/**
- * Determines final risk level - uses computed score or LLM's risk level
- * Compares both and uses the higher risk level
- */
 export function determineFinalRiskLevel(
-  analysis: PRAnalysisWithRiskScore
+  analysis: PRAnalysisWithRiskScore,
 ): RiskLevel {
-  // Priority map: higher number = higher priority/severity
   const RISK_PRIORITY = {
     LOW: 1,
     MEDIUM: 2,
@@ -296,7 +251,6 @@ export function determineFinalRiskLevel(
   const llmRiskValue = RISK_PRIORITY[analysis.riskLevel];
   const computedRiskValue = RISK_PRIORITY[analysis.computedRiskLevel];
 
-  // Return the higher risk level (prioritize worst-case scenario)
   return llmRiskValue >= computedRiskValue
     ? analysis.riskLevel
     : analysis.computedRiskLevel;

@@ -9,7 +9,7 @@ This document outlines the production-grade architecture improvements implemente
 ### 1. **Non-JSON Output Problem**
 
 **Before:** AI responses were inconsistent (sometimes markdown, sometimes text, sometimes JSON)
-**After:** Strict JSON prompt + safe parser = guaranteed structured output
+**After:** Strict JSON prompt + safe parser = guaranteed structured output atleast a thought.
 
 ### 2. **Unsafe JSON Parsing**
 

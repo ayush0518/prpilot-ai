@@ -48,7 +48,7 @@ function validateAnalysisStructure(data: unknown): data is PRAnalysis {
     typeof obj.riskLevel === "string" &&
     Array.isArray(obj.issues) &&
     Array.isArray(obj.improvements) &&
-    typeof obj.confidenceScore === "number";
+    typeof obj.signalStrength === "number";
 
   if (!hasRequiredFields) {
     return false;
@@ -82,9 +82,9 @@ function validateAnalysisStructure(data: unknown): data is PRAnalysis {
 
   // Validate confidence score range
   const confidenceValid =
-    typeof obj.confidenceScore === "number" &&
-    obj.confidenceScore >= 0 &&
-    obj.confidenceScore <= 1;
+    typeof obj.signalStrength === "number" &&
+    obj.signalStrength >= 0 &&
+    obj.signalStrength <= 1;
 
   return issuesValid && improvementsValid && confidenceValid;
 }
@@ -172,7 +172,7 @@ export function parseLLMResponse(rawResponse: string): ParseLLMResult {
         suggestion: String(issue.suggestion).trim(),
       })),
       improvements: parsedData.improvements.map((imp) => String(imp).trim()),
-      confidenceScore: Math.min(1, Math.max(0, parsedData.confidenceScore)),
+      signalStrength: Math.min(1, Math.max(0, parsedData.signalStrength)),
     };
 
     return {

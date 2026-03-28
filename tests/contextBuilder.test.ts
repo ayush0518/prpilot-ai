@@ -4,7 +4,6 @@ import {
   filterFilesByType,
   getLargestFiles,
   PRContext,
-  PRFile,
 } from "@/app/services/contextBuilder";
 
 describe("contextBuilder", () => {

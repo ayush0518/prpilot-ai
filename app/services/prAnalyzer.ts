@@ -32,6 +32,31 @@ interface AnalysisOutput {
   mergeReadiness?: MergeReadiness; // Single merge decision for the PR
 }
 
+function applyLowImpactOverride(
+  mergeReadiness: MergeReadiness,
+  analysis: PRAnalysisWithRiskScore,
+  finalRiskLevel: "LOW" | "MEDIUM" | "HIGH",
+  blastRadius: BlastRadius,
+): MergeReadiness {
+  const isLowImpactPR =
+    (finalRiskLevel === "LOW" || analysis.riskLevel === "LOW") &&
+    blastRadius.impactScore < 20 &&
+    analysis.issues.length === 0;
+
+  if (!isLowImpactPR) {
+    return mergeReadiness;
+  }
+
+  return {
+    ...mergeReadiness,
+    status: "SAFE",
+    score: Math.min(mergeReadiness.score, 15),
+    reason: "Low-impact PR (documentation/config changes only)",
+    decisionConfidence: Math.max(mergeReadiness.decisionConfidence, 0.9),
+    decisionType: "LOW_IMPACT_SAFE",
+  };
+}
+
 /**
  * Parses GitHub PR URL to extract owner, repo, and PR number
  */
@@ -226,9 +251,16 @@ export async function analyzePullRequest(
       finalRiskLevel,
       complianceRisk: compliance.riskLevel,
       impactScore: blastRadius.impactScore,
-      confidenceScore: analysis.confidenceScore,
+      signalStrength: analysis.signalStrength,
       totalFiles: context.files.length,
     });
+
+    const normalizedMergeReadiness = applyLowImpactOverride(
+      mergeReadiness,
+      analysis,
+      finalRiskLevel,
+      blastRadius,
+    );
 
     return {
       analysis,
@@ -240,7 +272,7 @@ export async function analyzePullRequest(
       },
       blastRadius,
       compliance,
-      mergeReadiness
+      mergeReadiness: normalizedMergeReadiness
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
@@ -273,9 +305,16 @@ export async function analyzePRFromData(prData: GitHubPRData): Promise<AnalysisO
       finalRiskLevel,
       complianceRisk: compliance.riskLevel,
       impactScore: blastRadius.impactScore,
-      confidenceScore: analysis.confidenceScore,
+      signalStrength: analysis.signalStrength,
       totalFiles: prData.files.length,
     });
+
+    const normalizedMergeReadiness = applyLowImpactOverride(
+      mergeReadiness,
+      analysis,
+      finalRiskLevel,
+      blastRadius,
+    );
 
     return {
       analysis,
@@ -286,7 +325,7 @@ export async function analyzePRFromData(prData: GitHubPRData): Promise<AnalysisO
       },
       blastRadius,
       compliance,
-      mergeReadiness
+      mergeReadiness: normalizedMergeReadiness
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
