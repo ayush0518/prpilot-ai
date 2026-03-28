@@ -245,7 +245,7 @@ All changes are backward compatible:
 
 ## 🔄 Files Modified
 
-1. `app/core/complianceEngine.ts` - Auth detection fix
+1. `app/core/complianceEngine.ts` - Auth detection fix + PII
 2. `app/core/blastRadiusEngine.ts` - Critical files + layer weights
 3. `app/core/riskEngine.ts` - Risk priority map
 4. `app/services/prAnalyzer.ts` - Documentation comment
