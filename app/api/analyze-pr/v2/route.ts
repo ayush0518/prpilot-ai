@@ -29,6 +29,7 @@ interface AnalyzePRResponse {
   repository?: {
     changedFiles: string[];
     totalFiles: number;
+    prUrl?: string;
   };
   blastRadius?: BlastRadius;
   compliance?: ComplianceResult;

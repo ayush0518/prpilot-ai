@@ -52,7 +52,12 @@ export async function POST(req: NextRequest) {
           mergeReadiness: data.mergeReadiness,
           blastRadius: data.blastRadius,
           compliance: data.compliance,
-          repository: data.repository,
+          repository: {
+            ...data.repository,
+            changedFiles: data.repository?.changedFiles || [],
+            totalFiles: data.repository?.totalFiles || 0,
+            prUrl,
+          },
           appUrl: process.env.APP_URL
         });
 
