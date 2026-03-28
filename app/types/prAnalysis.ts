@@ -31,7 +31,7 @@ export interface PRAnalysis {
   riskLevel: RiskLevel;
   issues: PRIssue[];
   improvements: string[];
-  confidenceScore: number;
+  signalStrength: number;
 }
 
 /**
@@ -102,6 +102,8 @@ export interface ComplianceResult {
   };
 }
 
+export type DecisionType = "LOW_IMPACT_SAFE" | "NORMAL" | "HIGH_RISK";
+
 /**
  * Merge readiness decision - single, deterministic decision for PR merge
  * Combines all signals: risk, compliance, impact, and confidence
@@ -110,6 +112,9 @@ export interface MergeReadiness {
   status: "SAFE" | "CAUTION" | "BLOCK";
   score: number; // 0-100
   reason: string;
+  decisionConfidence: number; // 0-1
+  signalStrength: number; // 0-1
+  decisionType: DecisionType;
 }
 
 /**

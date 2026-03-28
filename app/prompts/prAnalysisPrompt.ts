@@ -47,7 +47,7 @@ REQUIRED JSON SCHEMA (return this structure exactly):
     "suggestion 1",
     "suggestion 2"
   ],
-  "confidenceScore": 0.95
+  "signalStrength": 0.95
 }
 
 ---
@@ -60,7 +60,7 @@ CONSTRAINTS:
 - "type" must be one of: bug, security, performance, maintainability
 - "severity" must be one of: LOW, MEDIUM, HIGH
 - "improvements" should list 0-5 actionable suggestions
-- "confidenceScore" must be a number between 0 and 1
+- "signalStrength" must be a number between 0 and 1
 
 ---
 

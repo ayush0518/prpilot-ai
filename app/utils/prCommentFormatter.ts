@@ -39,7 +39,8 @@ export function generatePRComment(data: PRCommentData): string {
   const statusEmoji = getStatusEmoji(mergeReadiness.status);
   const statusColor = getStatusColor(mergeReadiness.status);
   const complianceLevel = getComplianceLevel(compliance.riskLevel);
-  const confidencePercent = Math.round(analysis.confidenceScore * 100);
+  const decisionConfidencePercent = toPercent(mergeReadiness.decisionConfidence);
+  const signalStrengthPercent = toPercent(mergeReadiness.signalStrength);
   const baseAppUrl = appUrl ? appUrl.replace(/\/+$/, "") : "";
   const encodedPrUrl = repository?.prUrl
     ? encodeURIComponent(repository.prUrl)
@@ -78,12 +79,14 @@ export function generatePRComment(data: PRCommentData): string {
   )}**
 
 **Score:** ${mergeReadiness.score}/100  
-**Confidence:** ${confidencePercent}%
+**Decision Confidence:** ${decisionConfidencePercent}%  
+**Signal Strength:** ${signalStrengthPercent}%  
+**Action:** ${getActionText(mergeReadiness)}
 
 ---
 
 ### ${EMOJI.why} Why this matters
-${formatWhyItMatters(mergeReadiness.status, analysis.issues.length || 0)}
+${formatWhyItMatters(mergeReadiness, analysis.issues.length || 0)}
 
 ---
 
@@ -107,6 +110,7 @@ ${formatSuggestions(analysis.improvements)}
 - Risk: **${analysis.riskLevel}**
 - Compliance: **${complianceLevel}**
 - Impact: **${mergeReadiness.score}/100**
+- Decision Type: **${mergeReadiness.decisionType}**
 
 ---
 
@@ -145,32 +149,74 @@ function getStatusColor(status: string): string {
   }
 }
 
-function formatWhyItMatters(status: string, issueCount: number): string {
+function formatWhyItMatters(
+  mergeReadiness: MergeReadiness,
+  issueCount: number,
+): string {
   const lines: string[] = [];
 
-  switch (status) {
-    case "SAFE":
-      lines.push("- Low risk detected in code changes");
-      lines.push("- No major concerns identified");
-      lines.push("- Safe to merge immediately");
-      break;
-    case "CAUTION":
-      lines.push("- Moderate risk detected in code changes");
-      lines.push("- Some important logic areas affected");
-      lines.push("- Review recommended before merging");
-      break;
-    case "BLOCK":
-      lines.push("- High risk detected in code changes");
-      lines.push("- Critical issues must be addressed");
-      lines.push("- Address concerns before merging");
-      break;
+  if (mergeReadiness.decisionType === "LOW_IMPACT_SAFE") {
+    lines.push("- Low-impact PR detected");
+    lines.push("- Minimal documentation or configuration changes only");
+    lines.push("- Safe to merge with optional review");
+  } else {
+    switch (mergeReadiness.status) {
+      case "SAFE":
+        lines.push("- Low risk detected in code changes");
+        lines.push("- No major concerns identified");
+        lines.push("- Safe to merge immediately");
+        break;
+      case "CAUTION":
+        lines.push("- Moderate risk detected in code changes");
+        lines.push("- Some important logic areas affected");
+        lines.push("- Review recommended before merging");
+        break;
+      case "BLOCK":
+        lines.push("- High risk detected in code changes");
+        lines.push("- Critical issues must be addressed");
+        lines.push("- Address concerns before merging");
+        break;
+    }
   }
 
   if (issueCount > 0) {
     lines.push(`- ${issueCount} issue${issueCount !== 1 ? "s" : ""} found`);
+  } else if (mergeReadiness.decisionType === "LOW_IMPACT_SAFE") {
+    lines.push("- No risks found");
   }
 
   return lines.join("\n");
+}
+
+function toPercent(value: unknown): number {
+  const numericValue =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number(value)
+        : Number.NaN;
+
+  if (!Number.isFinite(numericValue)) {
+    return 0;
+  }
+
+  return Math.max(0, Math.min(100, Math.round(numericValue * 100)));
+}
+
+function getActionText(mergeReadiness: MergeReadiness): string {
+  if (mergeReadiness.decisionType === "LOW_IMPACT_SAFE") {
+    return "Safe to merge — optional review";
+  }
+
+  if (mergeReadiness.decisionType === "HIGH_RISK" || mergeReadiness.status === "BLOCK") {
+    return "Needs review before merge";
+  }
+
+  if (mergeReadiness.status === "CAUTION") {
+    return "Review before merge";
+  }
+
+  return "Safe to merge";
 }
 
 function getComplianceLevel(riskLevel: string): string {

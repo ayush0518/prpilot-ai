@@ -88,7 +88,7 @@ export async function POST(req: Request) {
           );
         }
         finalDiff = await diffResponse.text();
-      } catch (error) {
+      } catch {
         return Response.json(
           { error: "Failed to fetch PR from GitHub. Please check the URL and try again." },
           { status: 400 }

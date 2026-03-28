@@ -1,4 +1,4 @@
-import { classifyFile, getLanguage, FileType } from "@/app/utils/fileClassifier";
+import { classifyFile, getLanguage } from "@/app/utils/fileClassifier";
 
 describe("fileClassifier", () => {
   describe("classifyFile", () => {
