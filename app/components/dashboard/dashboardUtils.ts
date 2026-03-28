@@ -94,7 +94,7 @@ export function getActionText(mergeReadiness: MergeReadiness): string {
   }
 
   if (mergeReadiness.status === "CAUTION") {
-    return "Review before merge";
+    return "Review key files before merging";
   }
 
   return "Safe to merge";

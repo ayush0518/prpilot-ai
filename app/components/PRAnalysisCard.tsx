@@ -10,7 +10,6 @@ import type {
 } from "@/app/types/prAnalysis";
 import BlastRadiusGraph from "./dashboard/BlastRadiusGraph";
 import ComplianceCard from "./dashboard/ComplianceCard";
-import ConfidenceCard from "./dashboard/ConfidenceCard";
 import ImprovementsCard from "./dashboard/ImprovementsCard";
 import RepositoryImpactCard from "./dashboard/RepositoryImpactCard";
 import RiskCard from "./dashboard/RiskCard";
@@ -86,6 +85,9 @@ export default function PRAnalysisCard({
         analysis={analysis}
         finalRiskLevel={finalRiskLevel}
         mergeReadiness={mergeReadiness}
+        repositoryData={repositoryData}
+        blastRadius={blastRadius}
+        compliance={compliance}
       />
 
       <BlastRadiusGraph blastRadius={blastRadius} />
@@ -106,17 +108,9 @@ export default function PRAnalysisCard({
         <ImprovementsCard improvements={analysis.improvements} />
       </motion.div>
 
-      <motion.div
-        variants={staggerVariants}
-        className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]"
-      >
+      <motion.div variants={staggerVariants}>
         <RepositoryImpactCard
           repositoryData={repositoryData}
-          blastRadius={blastRadius}
-        />
-        <ConfidenceCard
-          analysis={analysis}
-          mergeReadiness={mergeReadiness}
           blastRadius={blastRadius}
         />
       </motion.div>

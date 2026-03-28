@@ -17,6 +17,7 @@ export default function BlastRadiusGraph({
   const [selectedLayer, setSelectedLayer] = useState<string | null>(
     blastRadius?.affectedLayers[0] ?? null,
   );
+  const [hoveredLayer, setHoveredLayer] = useState<string | null>(null);
 
   if (!blastRadius) {
     return (
@@ -241,7 +242,7 @@ export default function BlastRadiusGraph({
                   />
 
                   {graphNodes.map((node) => {
-                    const isActive = node.name === activeLayer;
+                    const isActive = node.name === activeLayer || node.name === hoveredLayer;
 
                     return (
                       <g key={`link-${node.name}`}>
@@ -288,38 +289,61 @@ export default function BlastRadiusGraph({
 
                 <div className="absolute inset-0">
                   {graphNodes.map((node, index) => {
-                    const isActive = node.name === activeLayer;
+                    const isActive = node.name === activeLayer || node.name === hoveredLayer;
+                    const showTooltip = node.name === hoveredLayer;
 
                     return (
-                      <motion.button
+                      <div
                         key={node.name}
-                        type="button"
-                        initial={{ opacity: 0, scale: 0.9 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{
-                          duration: 0.35,
-                          delay: index * 0.08,
-                          ease: [0.16, 1, 0.3, 1],
-                        }}
-                        onClick={() => setSelectedLayer(node.name)}
-                        className={cx(
-                          "absolute flex -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-full border px-4 py-2.5 text-left shadow-[0_18px_45px_-28px_rgba(2,6,23,0.95)] backdrop-blur transition",
-                          isActive
-                            ? `${node.palette.softClass} shadow-[0_24px_60px_-30px_rgba(34,211,238,0.45)]`
-                            : "border-white/10 bg-slate-950/78 hover:border-white/18",
-                        )}
+                        className="absolute -translate-x-1/2 -translate-y-1/2"
                         style={{
                           left: `${(node.x / graphWidth) * 100}%`,
                           top: `${(node.y / graphHeight) * 100}%`,
                         }}
                       >
-                        <span
-                          className={cx("h-2.5 w-2.5 rounded-full", node.palette.dotClass)}
-                        />
-                        <span className="max-w-[160px] truncate text-sm font-medium text-slate-100">
-                          {node.name}
-                        </span>
-                      </motion.button>
+                        <AnimatePresence>
+                          {showTooltip ? (
+                            <motion.div
+                              initial={{ opacity: 0, y: 8 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: 6 }}
+                              transition={{ duration: 0.18 }}
+                              className="pointer-events-none absolute left-1/2 top-[-14px] z-20 min-w-max -translate-x-1/2 -translate-y-full rounded-2xl border border-white/10 bg-slate-950/92 px-3 py-2 text-xs text-slate-200 shadow-[0_20px_40px_-26px_rgba(2,6,23,0.98)]"
+                            >
+                              {node.name} Layer - {node.value} {pluralize(node.value, "file")} changed
+                            </motion.div>
+                          ) : null}
+                        </AnimatePresence>
+
+                        <motion.button
+                          type="button"
+                          initial={{ opacity: 0, scale: 0.9 }}
+                          animate={{ opacity: 1, scale: isActive ? 1.04 : 1 }}
+                          transition={{
+                            duration: 0.35,
+                            delay: index * 0.08,
+                            ease: [0.16, 1, 0.3, 1],
+                          }}
+                          onClick={() => setSelectedLayer(node.name)}
+                          onMouseEnter={() => setHoveredLayer(node.name)}
+                          onMouseLeave={() => setHoveredLayer((current) => (current === node.name ? null : current))}
+                          onFocus={() => setHoveredLayer(node.name)}
+                          onBlur={() => setHoveredLayer((current) => (current === node.name ? null : current))}
+                          className={cx(
+                            "relative z-10 flex items-center gap-2 rounded-full border px-4 py-2.5 text-left shadow-[0_18px_45px_-28px_rgba(2,6,23,0.95)] backdrop-blur transition",
+                            isActive
+                              ? `${node.palette.softClass} shadow-[0_24px_60px_-30px_rgba(34,211,238,0.45)]`
+                              : "border-white/10 bg-slate-950/78 hover:border-white/18",
+                          )}
+                        >
+                          <span
+                            className={cx("h-2.5 w-2.5 rounded-full", node.palette.dotClass)}
+                          />
+                          <span className="max-w-[160px] truncate text-sm font-medium text-slate-100">
+                            {node.name}
+                          </span>
+                        </motion.button>
+                      </div>
                     );
                   })}
                 </div>
