@@ -104,7 +104,7 @@ console.log(stats.totalAdditions); // 245
 
 ### 3. PR Analysis Prompt (`src/prompts/prAnalysisPrompt.ts`)
 
-Generates structured prompts for LLM analysis and formats responses. Isin it the great thing?
+Generates structured prompts for LLM analysis and formats responses.
 
 **Functions:**
 
