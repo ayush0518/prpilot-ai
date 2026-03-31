@@ -28,6 +28,11 @@ type RepositoryData = {
   totalFiles: number;
 };
 
+const FREE_ANALYSIS_LIMIT = 3;
+const CLIENT_USAGE_STORAGE_KEY = "mm_usage";
+const LIMIT_REACHED_MESSAGE =
+  "You’ve reached the free limit (3 PRs). DM for extended access.";
+
 const introCards = [
   {
     title: "Verdict-first hierarchy",
@@ -135,6 +140,9 @@ export default function Home() {
   const [prUrl, setPrUrl] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState("");
+  const [localUsage, setLocalUsage] = useState(0);
+  const [isDevBypass, setIsDevBypass] = useState(false);
+  const [showLimitNotice, setShowLimitNotice] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [repositoryData, setRepositoryData] = useState<RepositoryData | undefined>();
   const [blastRadius, setBlastRadius] = useState<BlastRadius | null>(null);
@@ -148,6 +156,25 @@ export default function Home() {
     setBlastRadius(null);
     setCompliance(null);
     setMergeReadiness(null);
+  }, []);
+
+  useEffect(() => {
+    const hostname = window.location.hostname;
+    const shouldBypassLimit =
+      process.env.NEXT_PUBLIC_DEV_BYPASS === "true" ||
+      hostname === "localhost" ||
+      hostname === "127.0.0.1";
+
+    setIsDevBypass(shouldBypassLimit);
+
+    if (shouldBypassLimit) {
+      return;
+    }
+
+    const storedUsage = Number(window.localStorage.getItem(CLIENT_USAGE_STORAGE_KEY) || "0");
+    if (Number.isFinite(storedUsage)) {
+      setLocalUsage(Math.max(0, Math.min(FREE_ANALYSIS_LIMIT, storedUsage)));
+    }
   }, []);
 
   const handleAnalyze = useCallback(async (overridePrUrl?: string) => {
@@ -165,8 +192,16 @@ export default function Home() {
       return;
     }
 
+    if (!isDevBypass && localUsage >= FREE_ANALYSIS_LIMIT) {
+      setShowLimitNotice(true);
+      setError(LIMIT_REACHED_MESSAGE);
+      clearAnalysisState();
+      return;
+    }
+
     setIsAnalyzing(true);
     setError("");
+    setShowLimitNotice(false);
 
     try {
       const response = await fetch("/api/analyze-pr/v2", {
@@ -180,7 +215,15 @@ export default function Home() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Failed to analyze PR.");
+        if (data?.errorCode === "FREE_LIMIT_REACHED") {
+          setLocalUsage(FREE_ANALYSIS_LIMIT);
+          window.localStorage.setItem(
+            CLIENT_USAGE_STORAGE_KEY,
+            String(FREE_ANALYSIS_LIMIT),
+          );
+          setShowLimitNotice(true);
+        }
+        throw new Error(data.message || data.error || "Failed to analyze PR.");
       }
 
       const normalizedAnalysis = normalizeAnalysis(data.analysis);
@@ -202,6 +245,12 @@ export default function Home() {
         setCompliance(data.compliance);
         setMergeReadiness(normalizedMergeReadiness);
       });
+
+      if (!isDevBypass) {
+        const nextUsage = Math.min(FREE_ANALYSIS_LIMIT, localUsage + 1);
+        setLocalUsage(nextUsage);
+        window.localStorage.setItem(CLIENT_USAGE_STORAGE_KEY, String(nextUsage));
+      }
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Something went wrong. Please try again.";
@@ -210,7 +259,7 @@ export default function Home() {
     } finally {
       setIsAnalyzing(false);
     }
-  }, [clearAnalysisState, prUrl]);
+  }, [clearAnalysisState, isDevBypass, localUsage, prUrl]);
 
   useEffect(() => {
     if (hasAutoAnalyzed.current) return;
@@ -229,6 +278,10 @@ export default function Home() {
     hasAutoAnalyzed.current = true;
     void handleAnalyze(incomingPrUrl);
   }, [handleAnalyze]);
+
+  const remainingAnalyses = isDevBypass
+    ? null
+    : Math.max(FREE_ANALYSIS_LIMIT - localUsage, 0);
 
   return (
     <div className="min-h-screen px-4 py-6 text-slate-100 sm:px-6 lg:px-8 lg:py-8">
@@ -337,6 +390,19 @@ export default function Home() {
               {isAnalyzing ? "Analyzing PR" : "Generate dashboard"}
             </motion.button>
 
+            <div className="mt-3 rounded-[18px] border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-slate-300">
+              {isDevBypass ? (
+                <span>Developer bypass enabled for this session.</span>
+              ) : (
+                <span>
+                  Free usage: {localUsage}/{FREE_ANALYSIS_LIMIT} analyses used.
+                  {remainingAnalyses === 0
+                    ? " Limit reached."
+                    : ` ${remainingAnalyses} remaining.`}
+                </span>
+              )}
+            </div>
+
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
               <div className="rounded-[20px] border border-white/10 bg-white/[0.03] p-4">
                 <p className="text-xs font-medium uppercase tracking-[0.2em] text-slate-500">
@@ -366,6 +432,15 @@ export default function Home() {
             {error ? (
               <div className="mt-4 rounded-[20px] border border-red-400/20 bg-red-400/10 p-4 text-sm text-red-100">
                 {error}
+              </div>
+            ) : null}
+
+            {showLimitNotice ? (
+              <div className="mt-4 rounded-[24px] border border-amber-300/20 bg-amber-300/10 p-5 text-sm text-amber-50">
+                <p className="text-base font-semibold">Free limit reached</p>
+                <p className="mt-2 leading-6 text-amber-50/85">
+                  {LIMIT_REACHED_MESSAGE}
+                </p>
               </div>
             ) : null}
           </motion.section>

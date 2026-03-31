@@ -1,5 +1,13 @@
 import { analyzePullRequest } from "@/app/services/prAnalyzer";
 import { PRAnalysisWithRiskScore, BlastRadius, ComplianceResult, MergeReadiness } from "@/app/types/prAnalysis";
+import {
+  createIpUsageKey,
+  createLimitReachedPayload,
+  getClientIp,
+  incrementUsage,
+  isDeveloperIp,
+  isLimitReached,
+} from "@/app/lib/usageTracker";
 
 /**
  * ⚡ CRITICAL: Force dynamic evaluation for this route
@@ -50,6 +58,8 @@ interface AnalyzePRResponse {
 export async function POST(req: Request): Promise<Response> {
   try {
     const body = (await req.json()) as AnalyzePRRequest;
+    const ip = getClientIp(req.headers);
+    const userKey = createIpUsageKey(ip);
 
     console.log("DEBUG: Incoming v2 request body:", JSON.stringify(body));
 
@@ -109,6 +119,14 @@ export async function POST(req: Request): Promise<Response> {
         } as AnalyzePRResponse,
         { status: 500 }
       );
+    }
+
+    if (!isDeveloperIp(ip) && isLimitReached(userKey)) {
+      return Response.json(createLimitReachedPayload(), { status: 403 });
+    }
+
+    if (!isDeveloperIp(ip)) {
+      incrementUsage(userKey);
     }
 
     // Perform analysis

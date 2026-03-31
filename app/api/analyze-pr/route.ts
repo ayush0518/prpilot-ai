@@ -1,4 +1,12 @@
 import OpenAI from "openai";
+import {
+  createIpUsageKey,
+  createLimitReachedPayload,
+  getClientIp,
+  incrementUsage,
+  isDeveloperIp,
+  isLimitReached,
+} from "@/app/lib/usageTracker";
 
 type PRAnalysisResponse = {
   pr_title: string;
@@ -55,6 +63,9 @@ function normalizeAnalysis(value: unknown): PRAnalysisResponse {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
+    const ip = getClientIp(req.headers);
+    const isDevIp = isDeveloperIp(ip);
+    const userKey = createIpUsageKey(ip);
     const diff = body?.diff;
     const pr_url = body?.pr_url;
 
@@ -112,6 +123,14 @@ export async function POST(req: Request) {
         { error: `Diff is too large. Keep it under ${MAX_DIFF_CHARS.toLocaleString()} characters.` },
         { status: 413 }
       );
+    }
+
+    if (!isDevIp && isLimitReached(userKey)) {
+      return Response.json(createLimitReachedPayload(), { status: 403 });
+    }
+
+    if (!isDevIp) {
+      incrementUsage(userKey);
     }
 
     const trimmedDiff = finalDiff.split("\n").slice(0, MAX_DIFF_LINES).join("\n");
